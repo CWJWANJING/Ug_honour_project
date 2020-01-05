@@ -1,10 +1,24 @@
 # Authour: Wanjing Chen
 
 import sqlite3
+import os
+import random
+import pdb
 
+def cleanup():
+    os.remove('B')
+    os.remove('R')
 
+def naming(number):
+    name = 'B' + str(number)
+    return name
 
 def sampling(database, table_name, prim_key, query):
+    try:
+        cleanup()
+    except Exception as e:
+        print("Couldn't cleanup: {}".format(e))
+
     # connect to the given database
     conn = sqlite3.connect(database)
     cursor = conn.cursor()
@@ -21,8 +35,76 @@ def sampling(database, table_name, prim_key, query):
     n = list(cursor.execute(f'''SELECT COUNT (DISTINCT {prim_key}) FROM {table_name}'''))[0][0]
 
     # get the vioated primary keys
-    violate_prims = list(cursor.execute(f'''SELECT COUNT (DISTINCT {prim_key}) FROM {table_name}'''))
+    violate_prims = list(cursor.execute(f'''SELECT DISTINCT {prim_key} FROM {table_name}'''))
 
-    for i in range(0,n-1):
+    # get information from the given database
+    attributesNtypes = list(cursor.execute(f'''pragma table_info('{table_name}')'''))
+
+
+    # forming the blocks
+    for i in range(0,n):
+        tableName = naming(i)
+
         # extract all the rows for the same primary key to form a block
         pre_b = cursor.execute(f'''SELECT * FROM {table_name} WHERE {prim_key} = {violate_prims[i][0]}''')
+        pre_b = list(pre_b)
+
+        # format 'create table' statement
+        create_statement = 'CREATE TABLE ' + tableName + ' ('
+
+        for row in attributesNtypes:
+            # row[1] is the attribute, row[2] is the type
+            create_statement += '{} {} ,'.format(row[1], row[2])
+        create_statement = create_statement[:-1] + ')'
+        # create tables in database B
+        cursor_block.execute(create_statement)
+
+        # format 'insert into' statement
+        insert_statement = 'INSERT INTO ' + tableName + ' VALUES '
+
+        for row in pre_b:
+            insert_statement += '{},'.format(row)
+        insert_statement = insert_statement[:-1]
+        cursor_block.execute(insert_statement)
+
+
+    # random select from blocks and form repair
+    repair_rows = []
+    for b in range(0,n):
+        tableName = naming(b)
+        n_b = list(cursor_block.execute(f'''SELECT COUNT(*) FROM {tableName}'''))
+        lists = list(cursor_block.execute(f'''SELECT * FROM {tableName}'''))
+        if len(lists) < 1:
+            None
+        else:
+            repair_rows.append(random.choice(lists))
+
+    # format 'create table' statement
+    create_statement = 'CREATE TABLE ' + 'Repair' + ' ('
+    # format 'insert into' statement
+    insert_statement = 'INSERT INTO ' + 'Repair' + ' VALUES '
+
+    for row in attributesNtypes:
+        # row[1] is the attribute, row[2] is the type
+        create_statement += '{} {} ,'.format(row[1], row[2])
+    create_statement = create_statement[:-1] + ')'
+    # create tables in database R
+    cursor_repair.execute(create_statement)
+
+    for row in repair_rows:
+        insert_statement += '{},'.format(row)
+    insert_statement = insert_statement[:-1]
+    cursor_repair.execute(insert_statement)
+
+    result = list(cursor_repair.execute(f'''{query}'''))
+
+    if result[0][0] == 1:
+        return 1
+    else:
+        return 0
+
+
+if __name__ == "__main__":
+    result = sampling('test_small.db', 'D', 'A', 'SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE A = 1) = 1 THEN 1 ELSE 0 END')
+    print(result)
+    cleanup()
