@@ -96,8 +96,8 @@ def sampling(database, table_name, prim_keys, query):
     # create tables in database R
     cursor_repair.execute(create_statement)
 
-    # print('repair_rows')
-    # print(repair_rows)
+    print('repair_rows')
+    print(repair_rows)
 
     for row in repair_rows:
         insert_statement += '{},'.format(row)
