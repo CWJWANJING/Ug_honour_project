@@ -13,7 +13,7 @@ def naming(number):
     name = 'B' + str(number)
     return name
 
-def sampling(database, table_name, prim_key, query):
+def sampling(database, table_name, prim_keys, query):
     try:
         cleanup()
     except Exception as e:
@@ -31,11 +31,11 @@ def sampling(database, table_name, prim_key, query):
     conn_block = sqlite3.connect('B')
     cursor_block = conn_block.cursor()
 
-    # get the number of blocks first
-    n = list(cursor.execute(f'''SELECT COUNT (DISTINCT {prim_key}) FROM {table_name}'''))[0][0]
+    # get the distinct primary keys
+    distinct_prims = list(cursor.execute(f'''SELECT DISTINCT {prim_keys} FROM {table_name}'''))
 
-    # get the vioated primary keys
-    violate_prims = list(cursor.execute(f'''SELECT DISTINCT {prim_key} FROM {table_name}'''))
+    # get the number of blocks
+    n = len(distinct_prims)
 
     # get information from the given database
     attributesNtypes = list(cursor.execute(f'''pragma table_info('{table_name}')'''))
@@ -45,8 +45,13 @@ def sampling(database, table_name, prim_key, query):
     for i in range(0,n):
         tableName = naming(i)
 
-        # extract all the rows for the same primary key to form a block
-        pre_b = cursor.execute(f'''SELECT * FROM {table_name} WHERE {prim_key} = {violate_prims[i][0]}''')
+        # extract all the rows for the same primary key to form a block:
+        # depending on whether it's composite primary key or not
+        #pdb.set_trace()
+        if len(prim_keys) == 1:
+            pre_b = cursor.execute(f'''SELECT * FROM {table_name} WHERE ({prim_keys}) = {distinct_prims[i][0]}''')
+        else:
+            pre_b = cursor.execute(f'''SELECT * FROM {table_name} WHERE ({prim_keys}) = ({distinct_prims[i]})''')
         pre_b = list(pre_b)
 
         # format 'create table' statement
@@ -91,6 +96,9 @@ def sampling(database, table_name, prim_key, query):
     # create tables in database R
     cursor_repair.execute(create_statement)
 
+    # print('repair_rows')
+    # print(repair_rows)
+
     for row in repair_rows:
         insert_statement += '{},'.format(row)
     insert_statement = insert_statement[:-1]
@@ -104,7 +112,11 @@ def sampling(database, table_name, prim_key, query):
         return 0
 
 
+# def FPRAS(database, query, primary_keys, epsilon, delta)
+
 if __name__ == "__main__":
-    result = sampling('test_small.db', 'D', 'A', 'SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE A = 1) = 1 THEN 1 ELSE 0 END')
+    # result = sampling('test_small.db', 'D', 'A', 'SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE A = 1) = 1 THEN 1 ELSE 0 END')
+    # result = sampling('test_small.db', 'D', 'A, B', 'SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (A,B) = (1,2)) = 1 THEN 1 ELSE 0 END')
+    result = sampling('test_small.db', 'D', 'A, B', 'SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (A,B,C) = (1,2,3)) = 1 THEN 1 ELSE 0 END')
     print(result)
     cleanup()
