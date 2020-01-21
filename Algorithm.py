@@ -18,14 +18,14 @@ def naming(number):
     name = 'B' + str(number)
     return name
 
-def get_prim_key_cols(prim_keys, attrs_types):
+def get_prim_key_cols(prim_keys, attributesNtypes):    # get the location of primary keys
     cols = []
-    for idx, row in enumerate(attrs_types):
+    for idx, row in enumerate(attributesNtypes):
         if row[0] in prim_keys:
             cols.append(idx)
     return cols
 
-def get_dist_prim_keys(prim_keys, table_name, conn, cursor):
+def get_dist_prim_keys(prim_keys, table_name, conn, cursor):    # get the distinct primary key values
     idents = [sql.Identifier(prim) for prim in prim_keys]
     sql_str_dis = "SELECT DISTINCT " + ", ".join(["{}" for i in idents]) + " FROM " + table_name + ";"
     cursor.execute(sql.SQL(sql_str_dis).format(*idents).as_string(conn))
@@ -39,105 +39,77 @@ def get_dist_prim_keys(prim_keys, table_name, conn, cursor):
             distinct_prims.append(dis)
     return distinct_prims
 
+def create_repairs_blocks_table(attributesNtypes, cursor_rnb):
+    create_statement_b = 'CREATE TABLE Blocks ' + ' ('   # format blocks 'create table' statement
+    create_statement_r = 'CREATE TABLE Repair' + ' ('    # format repairs 'create table' statement
+
+    for row in attributesNtypes:    # row[0] is the attribute, row[1] is the type
+        create_statement_b += '{} {} ,'.format(row[0], row[1])
+        create_statement_r += '{} {} ,'.format(row[0], row[1])
+    create_statement_b += 'B text)'
+    create_statement_r = create_statement_r[:-1] + ')'
+    cursor_rnb.execute(create_statement_b)    # create tables in database
+    cursor_rnb.execute(create_statement_r)
+
+def insert_repair_table(repair_rows, cursor_rnb):
+    insert_statement = 'INSERT INTO Repair VALUES '    # format 'insert into' statement
+    for row in repair_rows:
+        insert_statement += '{},'.format(row)
+    insert_statement = insert_statement[:-1]
+    cursor_rnb.execute(insert_statement)
+
+def blocks_repairs_formation(table, cols):    # for loop forms the blocks and in the mean time, do random selection and forms the repair rows
+    prev_prim_keys = None
+    max_m = 0
+    m = 0
+    count_block = -1
+    current_block = []
+    repair_rows = []
+    for idx, row in enumerate(table):
+        new_prim_key = [row[col] for col in cols]
+        if idx == 0 or new_prim_key == prev_prim_keys:
+            m += 1
+            current_block.append(row)
+        else:
+            random_idx = random.randint(0,m-1)
+            repair_rows.append(current_block[random_idx])
+            current_block = []
+            current_block.append(row)
+            if m > max_m:    # if in new block, finish prev block m
+                max_m = m
+            m = 1    # now in new block, so seen 1 row so far
+            count_block += 1
+        block_no = naming(count_block)
+        prev_prim_keys = new_prim_key
+    print(f"Inserted {idx+1} rows, {count_block+1} blocks")
+    return max_m, repair_rows
+
 def sampling(database, table_name, prim_keys, query):
     try:
         cleanup()
     except Exception as e:
         print("Couldn't cleanup: {}".format(e))
 
-    # connect to the given database
-    conn = psycopg2.connect(database=database, user="postgres", password="3526", host="127.0.0.1", port="5432")
+    conn = psycopg2.connect(database=database, user="postgres", password="3526", host="127.0.0.1", port="5432")    # connect to the given database
     cursor = conn.cursor()
 
-    # create a new database for or storing blocks and storing repairs
-    conn_rnb = sqlite3.connect('RNB')
+    conn_rnb = sqlite3.connect('RNB')    # create a new database for or storing blocks and storing repairs
     cursor_rnb = conn_rnb.cursor()
 
-    # get the distinct primary keys
-    distinct_prims = get_dist_prim_keys(prim_keys, table_name, conn, cursor)
+    distinct_prims = get_dist_prim_keys(prim_keys, table_name, conn, cursor)    # get the distinct primary keys
 
-    # get the number of blocks
-    n = len(distinct_prims)
-
-    # get information from the given database
-    # TODO: surely the below should be using Identifier not Literal?
-    cursor.execute(sql.SQL("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = {};").format(sql.Literal(table_name)))
+    cursor.execute(sql.SQL("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = {};").format(sql.Literal(table_name)))    # get information from the given database
     attributesNtypes = cursor.fetchall()
 
-    # format blocks 'create table' statement
-    create_statement_b = 'CREATE TABLE Blocks ' + ' ('
-    # format repairs 'create table' statement
-    create_statement_r = 'CREATE TABLE Repair' + ' ('
+    create_repairs_blocks_table(attributesNtypes, cursor_rnb)
 
-    for row in attributesNtypes:
-        # row[0] is the attribute, row[1] is the type
-        create_statement_b += '{} {} ,'.format(row[0], row[1])
-        create_statement_r += '{} {} ,'.format(row[0], row[1])
-    create_statement_b += 'B text)'
-    create_statement_r = create_statement_r[:-1] + ')'
-    # create tables in database
-    cursor_rnb.execute(create_statement_b)
-    cursor_rnb.execute(create_statement_r)
-
-
-    # get the sizes of each block
-    Ms = []
-
-    sql_str_loop = "SELECT * FROM " + table_name + " ORDER BY " + ", ".join(prim_keys) + ";"
-    # forming the blocks
+    sql_str_loop = "SELECT * FROM " + table_name + " ORDER BY " + ", ".join(prim_keys) + ";"    # get all the table data, ordering by primary keys for forming blocks
     cursor.execute(sql_str_loop)
     table = cursor.fetchall()
 
     cols = get_prim_key_cols(prim_keys, attributesNtypes)
-
-    prev_prim_keys = None
-    max_m = 0
-    m = 0
-    insert_statement = "INSERT INTO Blocks VALUES "
-    count_block = -1
-    current_block = []
-    repair_rows = []
-    # pdb.set_trace()
-    for idx, row in enumerate(table):
-        new_prim_key = [row[col] for col in cols]
-
-        if idx == 0 or new_prim_key == prev_prim_keys:
-            m += 1
-            current_block.append(row)
-        else:
-            # print(current_block)
-            # print(m)
-            # print('idx')
-            random_idx = random.randint(0,m-1)
-            # print(random_idx)
-            repair_rows.append(current_block[random_idx])
-            # print('repair_rows', repair_rows)
-            current_block = []
-            current_block.append(row)
-            # if in new block, finish prev block m
-            if m > max_m:
-                max_m = m
-            # now in new block, so seen 1 row so far
-            m = 1
-            count_block += 1
-        block_no = naming(count_block)
-
-        # insert_statement += str((*row, block_no)) + ", "
-        prev_prim_keys = new_prim_key
-
-    # cursor_rnb.execute(insert_statement[:-2])
-    print(f"Inserted {idx+1} rows, {count_block+1} blocks")
-
-    # get M for preparation of  FPRAS algorithm
-    M = max_m
-
-    # format 'insert into' statement
-    insert_statement = 'INSERT INTO Repair VALUES '
-    for row in repair_rows:
-        # row = row[:-1]
-        insert_statement += '{},'.format(row)
-    insert_statement = insert_statement[:-1]
-    cursor_rnb.execute(insert_statement)
+    M, repair_rows = blocks_repairs_formation(table, cols)
+    insert_repair_table(repair_rows, cursor_rnb)
 
     result = list(cursor_rnb.execute(f'''{query}'''))
 
