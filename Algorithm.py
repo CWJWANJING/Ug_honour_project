@@ -2,14 +2,12 @@
 
 import sqlite3
 import os
-import sys
 import random
 import pdb
 import math
 import psycopg2
 from psycopg2 import sql
 import decimal
-import random
 
 def cleanup():
     os.remove('RNB')
@@ -44,11 +42,8 @@ def create_repairs_blocks_table(attributesNtypes, cursor_rnb):
     create_statement_r = 'CREATE TABLE Repair' + ' ('    # format repairs 'create table' statement
 
     for row in attributesNtypes:    # row[0] is the attribute, row[1] is the type
-        create_statement_b += '{} {} ,'.format(row[0], row[1])
         create_statement_r += '{} {} ,'.format(row[0], row[1])
-    create_statement_b += 'B text)'
     create_statement_r = create_statement_r[:-1] + ')'
-    cursor_rnb.execute(create_statement_b)    # create tables in database
     cursor_rnb.execute(create_statement_r)
 
 def insert_repair_table(repair_rows, cursor_rnb):
@@ -158,15 +153,15 @@ if __name__ == "__main__":
     # result_sample = sampling('test_small.db', 'D', 'A', 'SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE A = 1) = 1 THEN 1 ELSE 0 END')
     # result_sample = sampling('test_small.db', 'D', 'A, B', 'SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (A,B) = (1,2)) = 1 THEN 1 ELSE 0 END')
 
-    # result_sample = sampling('food_inspections_chicago', 'facilities', ('license_', 'aka_name'), "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (license_, aka_name) =  (2516677,'KIMCHI POP')) = 1 THEN 1 ELSE 0 END")[0]
+    result_sample = sampling('food_inspections_chicago', 'facilities', ('license_', 'aka_name'), "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (license_, aka_name) =  (2516677,'KIMCHI POP')) = 1 THEN 1 ELSE 0 END")[0]
     # result_sample = sampling("lobbyists_db", "clients", ('client_id',), "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE client_id = 38662) = 1 THEN 1 ELSE 0 END")[0]
     # result_sample = sampling("traffic_crashes_chicago", "locations", ('street_name', 'street_no', 'street_direction'),  "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (street_name, street_no, street_direction) = ('ARCHER AVE', '3652', 'S')) = 1 THEN 1 ELSE 0 END")[0]
 
     # result_fpras = FPRAS('food_inspections_chicago', 'facilities', ('license_', 'aka_name'), "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (license_, aka_name) =  (2516677,'KIMCHI POP')) = 1 THEN 1 ELSE 0 END", 7, 0.68)
     # result_fpras = FPRAS("lobbyists_db", "clients", ('client_id',),  "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE client_id = 38662) = 1 THEN 1 ELSE 0 END", 3, 0.68)
-    result_fpras = FPRAS("traffic_crashes_chicago", "locations", ('street_name', 'street_no', 'street_direction'),  "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (street_name, street_no, street_direction) = ('ARCHER AVE', '3652', 'S')) = 1 THEN 1 ELSE 0 END", 3, 0.88)
+    # result_fpras = FPRAS("traffic_crashes_chicago", "locations", ('street_name', 'street_no', 'street_direction'),  "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (street_name, street_no, street_direction) = ('ARCHER AVE', '3652', 'S')) = 1 THEN 1 ELSE 0 END", 3, 0.88)
 
-    # print(result_sample)
-    print(result_fpras)
+    print(result_sample)
+    # print(result_fpras)
 
     # cleanup()
