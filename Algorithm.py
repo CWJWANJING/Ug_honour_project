@@ -12,10 +12,6 @@ import decimal
 def cleanup():
     os.remove('RNB')
 
-def naming(number):
-    name = 'B' + str(number)
-    return name
-
 def get_prim_key_cols(prim_keys, attributesNtypes):    # get the location of primary keys
     cols = []
     for idx, row in enumerate(attributesNtypes):
@@ -66,6 +62,9 @@ def blocks_repairs_formation(table, cols):    # for loop forms the blocks and in
             m += 1
             current_block.append(row)
         else:
+            # this commented codes are for finding the violated primary keys in the database
+            # if m > 1:
+            #     print(current_block)
             random_idx = random.randint(0,m-1)
             repair_rows.append(current_block[random_idx])
             current_block = []
@@ -74,9 +73,8 @@ def blocks_repairs_formation(table, cols):    # for loop forms the blocks and in
                 max_m = m
             m = 1    # now in new block, so seen 1 row so far
             count_block += 1
-        block_no = naming(count_block)
         prev_prim_keys = new_prim_key
-    print(f"Inserted {idx+1} rows, {count_block+1} blocks")
+    # print(f"Inserted {idx+1} rows, {count_block+2} blocks")
     return max_m, repair_rows
 
 def sampling(database, table_name, prim_keys, query):
@@ -138,7 +136,7 @@ def FPRAS(database, table_name,  prim_keys, query, epsilon, delta):
     print('k (keywidth): ', k)
 
     mathLog = math.log(2/delta)
-    N = ((decimal.Decimal((2+epsilon))*pow(M,k))/pow(epsilon,2))*decimal.Decimal(mathLog)
+    N = ((decimal.Decimal((2+epsilon))*pow(M,k))/pow(decimal.Decimal(epsilon),2))*decimal.Decimal(mathLog)
     print('N: ', N)
     NLoop = math.ceil(N)
 
@@ -152,16 +150,27 @@ def FPRAS(database, table_name,  prim_keys, query, epsilon, delta):
 if __name__ == "__main__":
     # result_sample = sampling('test_small.db', 'D', 'A', 'SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE A = 1) = 1 THEN 1 ELSE 0 END')
     # result_sample = sampling('test_small.db', 'D', 'A, B', 'SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (A,B) = (1,2)) = 1 THEN 1 ELSE 0 END')
+    results = []
+    for i in range(0,5):
+        # result_sample = sampling('food_inspections_chicago', 'facilities', ('license_', 'aka_name'), "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (license_, aka_name) =  (1299537, 'GALLERIA MARKET')) = 1 THEN 1 ELSE 0 END")[0]
+        # result_sample = sampling("lobbyists_db", "clients", ('client_id',), "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE client_id = 38662) = 1 THEN 1 ELSE 0 END")[0]
+        # result_sample = sampling("traffic_crashes_chicago", "locations", ('street_name', 'street_no', 'street_direction'),  "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (street_name, street_no, street_direction) = ('ARCHER AVE', '3652', 'S')) = 1 THEN 1 ELSE 0 END")[0]
+        # result_fpras = FPRAS('food_inspections_chicago', 'facilities', ('license_', 'aka_name'), "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (license_, aka_name) =  (2516677,'KIMCHI POP')) = 1 THEN 1 ELSE 0 END", 15, 0.5)
+        # results.append(result_sample)
+        # result_fpras = FPRAS("lobbyists_db", "clients", ('client_id',),  "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE client_id = 38662) = 1 THEN 1 ELSE 0 END", 5, 0.4)
+        result_fpras = FPRAS("traffic_crashes_chicago", "locations", ('street_name', 'street_no', 'street_direction'),  "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (street_name, street_no, street_direction) = ('ARCHER AVE', '3652', 'S')) = 1 THEN 1 ELSE 0 END", 3, 0.88)
 
-    result_sample = sampling('food_inspections_chicago', 'facilities', ('license_', 'aka_name'), "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (license_, aka_name) =  (2516677,'KIMCHI POP')) = 1 THEN 1 ELSE 0 END")[0]
-    # result_sample = sampling("lobbyists_db", "clients", ('client_id',), "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE client_id = 38662) = 1 THEN 1 ELSE 0 END")[0]
-    # result_sample = sampling("traffic_crashes_chicago", "locations", ('street_name', 'street_no', 'street_direction'),  "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (street_name, street_no, street_direction) = ('ARCHER AVE', '3652', 'S')) = 1 THEN 1 ELSE 0 END")[0]
+        print(result_fpras)
+        print('Experiment: ', i)
+    # print(results.count(1))
 
-    # result_fpras = FPRAS('food_inspections_chicago', 'facilities', ('license_', 'aka_name'), "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (license_, aka_name) =  (2516677,'KIMCHI POP')) = 1 THEN 1 ELSE 0 END", 7, 0.68)
-    # result_fpras = FPRAS("lobbyists_db", "clients", ('client_id',),  "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE client_id = 38662) = 1 THEN 1 ELSE 0 END", 3, 0.68)
-    # result_fpras = FPRAS("traffic_crashes_chicago", "locations", ('street_name', 'street_no', 'street_direction'),  "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (street_name, street_no, street_direction) = ('ARCHER AVE', '3652', 'S')) = 1 THEN 1 ELSE 0 END", 3, 0.88)
+#     result_sample = sampling('out1', ('lineitem', 'partsupp'),  )
+# SELECT *
+# FROM lineitem, partsupp
+# WHERE lineitem.l_suppkey = partsupp.ps_suppkey AND partsupp.ps_availqty = 674 AND lineitem.l_tax = 0.000
 
-    print(result_sample)
+
+    # print(result_sample)
     # print(result_fpras)
 
     # cleanup()
