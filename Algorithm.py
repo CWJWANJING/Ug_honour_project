@@ -1,16 +1,30 @@
 # Authour: Wanjing Chen
 
+import sys
 import sqlite3
 import os
+import os.path
 import random
 import pdb
 import math
 import psycopg2
 from psycopg2 import sql
 import decimal
+from decimal import Decimal
+import datetime
+import time
+from collections import defaultdict
+
+def fast_randint(size):
+    """Returns a random integer between 0 and size
+    faster than random.randint
+    From:
+    https://eli.thegreenplace.net/2018/slow-and-fast-methods-for-generating-random-integers-in-python/
+    """
+    return int(random.random()*size)
 
 def cleanup():
-    os.remove('RNB')
+    os.remove('RNB.db')
 
 def get_prim_key_cols(prim_keys, attributesNtypes):    # get the location of primary keys
     cols = []
@@ -19,35 +33,41 @@ def get_prim_key_cols(prim_keys, attributesNtypes):    # get the location of pri
             cols.append(idx)
     return cols
 
-def get_dist_prim_keys(prim_keys, table_name, conn, cursor):    # get the distinct primary key values
-    idents = [sql.Identifier(prim) for prim in prim_keys]
-    sql_str_dis = "SELECT DISTINCT " + ", ".join(["{}" for i in idents]) + " FROM " + table_name + ";"
-    cursor.execute(sql.SQL(sql_str_dis).format(*idents).as_string(conn))
-    pre_distinct_prims = cursor.fetchall()
-    distinct_prims = []
-    if len(prim_keys) == 1:
-        for dis in pre_distinct_prims:
-            distinct_prims.append(dis[0])
-    else:
-        for dis in pre_distinct_prims:
-            distinct_prims.append(dis)
-    return distinct_prims
-
-def create_repairs_blocks_table(attributesNtypes, cursor_rnb):
-    create_statement_b = 'CREATE TABLE Blocks ' + ' ('   # format blocks 'create table' statement
-    create_statement_r = 'CREATE TABLE Repair' + ' ('    # format repairs 'create table' statement
+def create_repairs_blocks_table(attributesNtypes, table_name, cursor_rnb):
+    create_statement_r = 'CREATE TABLE ' + table_name + ' ('    # format repairs 'create table' statement
 
     for row in attributesNtypes:    # row[0] is the attribute, row[1] is the type
         create_statement_r += '{} {} ,'.format(row[0], row[1])
     create_statement_r = create_statement_r[:-1] + ')'
     cursor_rnb.execute(create_statement_r)
 
-def insert_repair_table(repair_rows, cursor_rnb):
-    insert_statement = 'INSERT INTO Repair VALUES '    # format 'insert into' statement
+def toStr(row):
+    new_row = []
+    for r in row:
+        r = str(r)
+        new_row.append(r)
+    new_row = tuple(new_row)
+    return new_row
+
+def insert_repair_table(repair_rows, table_name, cursor_rnb):
+    insert_statement = 'INSERT INTO ' + table_name +' VALUES '    # format 'insert into' statement
+    count = 0
+
     for row in repair_rows:
+        row = toStr(row)
+        count += 1
         insert_statement += '{},'.format(row)
-    insert_statement = insert_statement[:-1]
-    cursor_rnb.execute(insert_statement)
+
+        if count>0 and count%1000 == 0:
+            insert_statement = insert_statement[:-1]
+            # print("1000 statement" + insert_statement)
+            cursor_rnb.execute(insert_statement)
+            break
+            insert_statement = 'INSERT INTO ' + table_name + ' VALUES '
+        else:
+            if (len(repair_rows)-count) < 1000:
+                insert_statement = insert_statement[:-1]
+                cursor_rnb.execute(insert_statement)
 
 def blocks_repairs_formation(table, cols):    # for loop forms the blocks and in the mean time, do random selection and forms the repair rows
     prev_prim_keys = None
@@ -62,10 +82,10 @@ def blocks_repairs_formation(table, cols):    # for loop forms the blocks and in
             m += 1
             current_block.append(row)
         else:
-            # this commented codes are for finding the violated primary keys in the database
+            # this commented code is for finding the violated primary keys in the database
             # if m > 1:
             #     print(current_block)
-            random_idx = random.randint(0,m-1)
+            random_idx = fast_randint(m-1)
             repair_rows.append(current_block[random_idx])
             current_block = []
             current_block.append(row)
@@ -77,63 +97,78 @@ def blocks_repairs_formation(table, cols):    # for loop forms the blocks and in
     # print(f"Inserted {idx+1} rows, {count_block+2} blocks")
     return max_m, repair_rows
 
-def sampling(database, table_name, prim_keys, query):
+def sampling(database, table_namesNschemas, primary_keys_multi, query):
     try:
         cleanup()
     except Exception as e:
         print("Couldn't cleanup: {}".format(e))
 
-    conn = psycopg2.connect(database=database, user="postgres", password="3526", host="127.0.0.1", port="5432")    # connect to the given database
+    tic = time.perf_counter()
+
+    conn = psycopg2.connect(database=database, user="postgres", password="230360", host="127.0.0.1", port="5432")    # connect to the given database
     cursor = conn.cursor()
 
-    conn_rnb = sqlite3.connect('RNB')    # create a new database for or storing blocks and storing repairs
+    conn_rnb = sqlite3.connect('RNB.db')    # create a new database for or storing blocks and storing repairs
     cursor_rnb = conn_rnb.cursor()
 
-    distinct_prims = get_dist_prim_keys(prim_keys, table_name, conn, cursor)    # get the distinct primary keys
+    Ms = []
+    for i in range(0, len(table_namesNschemas)):
+        schema, table_name= table_namesNschemas[i].split('.')
 
-    cursor.execute(sql.SQL("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = {};").format(sql.Literal(table_name)))    # get information from the given database
-    attributesNtypes = cursor.fetchall()
+        cursor.execute(
+            sql.SQL(
+                "SELECT column_name, data_type FROM information_schema.columns "
+                "WHERE table_name = {} AND table_schema = {};"
+            ).format(sql.Literal(table_name), sql.Literal(schema)))
+        attributesNtypes = cursor.fetchall()
 
-    create_repairs_blocks_table(attributesNtypes, cursor_rnb)
+        create_repairs_blocks_table(attributesNtypes, table_name, cursor_rnb)
 
-    sql_str_loop = "SELECT * FROM " + table_name + " ORDER BY " + ", ".join(prim_keys) + ";"    # get all the table data, ordering by primary keys for forming blocks
-    cursor.execute(sql_str_loop)
-    table = cursor.fetchall()
+        # get all the table data, ordering by primary keys for forming blocks
+        sql_str_loop =  f"SELECT * FROM {table_namesNschemas[i]} " \
+                        f"ORDER BY {', '.join(primary_keys_multi[i])};"
 
-    cols = get_prim_key_cols(prim_keys, attributesNtypes)
-    M, repair_rows = blocks_repairs_formation(table, cols)
-    insert_repair_table(repair_rows, cursor_rnb)
+        cursor.execute(sql_str_loop)
+        table = cursor.fetchall()
+
+        cols = get_prim_key_cols(primary_keys_multi[i], attributesNtypes)
+        M, repair_rows = blocks_repairs_formation(table, cols)
+        insert_repair_table(repair_rows, table_name, cursor_rnb)
+        Ms.append(M)
 
     result = list(cursor_rnb.execute(f'''{query}'''))
+    toc = time.perf_counter()
+    print((f"Sampling ran in {toc - tic:0.4f} seconds"))
 
     if result[0][0] == 1:
-        return (1,M)
+        return (1,Ms)
     else:
-        return (0,M)
+        return (0,Ms)
 
-
-def FPRAS(database, table_name,  prim_keys, query, epsilon, delta):
+def FPRAS(database, table_namesNschemas,  primary_keys_multi, query, epsilon, delta):
     # connect to the given database
-    conn = psycopg2.connect(database=database, user="postgres", password="3526", host="127.0.0.1", port="5432")
+    conn = psycopg2.connect(database=database, user="postgres", password="230360", host="127.0.0.1", port="5432")
     cursor = conn.cursor()
 
-    # get all attributes
-    cursor.execute(sql.SQL("SELECT column_name FROM information_schema.columns WHERE table_name =  {};").format(sql.Literal(table_name)))
-    pre_attributes = cursor.fetchall()
-    attributes = []
-    for att in pre_attributes:
-        attributes.append(att[0])
+    # initialise keywidth
+    k = 0
+    for i in range(0, len(table_namesNschemas)):
+        schema, table_name = table_namesNschemas[i].split('.')
+        # get all attributes
+        cursor.execute(sql.SQL("SELECT column_name FROM information_schema.columns WHERE table_name =  {} and table_schema = {};").format(sql.Literal(table_name), sql.Literal(schema)))
+        pre_attributes = cursor.fetchall()
+        attributes = []
+        for att in pre_attributes:
+            attributes.append(att[0])
+
+        for a in attributes:
+            if a in query:
+                k += 1
+    print('k (keywidth): ', k)
 
     # get maximum size of the blocks
-    M = sampling(database, table_name, prim_keys, query)[1]
+    M = max(sampling(database, table_namesNschemas, primary_keys_multi, query)[1])
     print('M (the maximum size of the blocks): ', M)
-
-    # get keywidth
-    k = 0
-    for a in attributes:
-        if a in query:
-            k += 1
-    print('k (keywidth): ', k)
 
     mathLog = math.log(2/delta)
     N = ((decimal.Decimal((2+epsilon))*pow(M,k))/pow(decimal.Decimal(epsilon),2))*decimal.Decimal(mathLog)
@@ -142,7 +177,7 @@ def FPRAS(database, table_name,  prim_keys, query, epsilon, delta):
 
     count = 0
     for i in range(0, NLoop):
-        count += sampling(database, table_name, prim_keys, query)[0]
+        count += sampling(database, table_namesNschemas, primary_keys_multi, query)[0]
     print('The sum of sampling score is: ', count)
     print('The probability is: ')
     return count/N
@@ -150,27 +185,27 @@ def FPRAS(database, table_name,  prim_keys, query, epsilon, delta):
 if __name__ == "__main__":
     # result_sample = sampling('test_small.db', 'D', 'A', 'SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE A = 1) = 1 THEN 1 ELSE 0 END')
     # result_sample = sampling('test_small.db', 'D', 'A, B', 'SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (A,B) = (1,2)) = 1 THEN 1 ELSE 0 END')
-    results = []
-    for i in range(0,5):
+    # results = []
+    for i in range(0,1):
         # result_sample = sampling('food_inspections_chicago', 'facilities', ('license_', 'aka_name'), "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (license_, aka_name) =  (1299537, 'GALLERIA MARKET')) = 1 THEN 1 ELSE 0 END")[0]
         # result_sample = sampling("lobbyists_db", "clients", ('client_id',), "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE client_id = 38662) = 1 THEN 1 ELSE 0 END")[0]
         # result_sample = sampling("traffic_crashes_chicago", "locations", ('street_name', 'street_no', 'street_direction'),  "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (street_name, street_no, street_direction) = ('ARCHER AVE', '3652', 'S')) = 1 THEN 1 ELSE 0 END")[0]
-        # result_fpras = FPRAS('food_inspections_chicago', 'facilities', ('license_', 'aka_name'), "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (license_, aka_name) =  (2516677,'KIMCHI POP')) = 1 THEN 1 ELSE 0 END", 15, 0.5)
+        # result_fpras = FPRAS('food_inspections_chicago', 'facilities', ('license_', 'aka_name'), "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (license_, aka_name) =  (2516677,'KIMCHI POP')) = 1 THEN 1 ELSE 0 END", 0.6, 0.5)
         # results.append(result_sample)
-        # result_fpras = FPRAS("lobbyists_db", "clients", ('client_id',),  "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE client_id = 38662) = 1 THEN 1 ELSE 0 END", 5, 0.4)
-        result_fpras = FPRAS("traffic_crashes_chicago", "locations", ('street_name', 'street_no', 'street_direction'),  "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (street_name, street_no, street_direction) = ('ARCHER AVE', '3652', 'S')) = 1 THEN 1 ELSE 0 END", 3, 0.88)
+        # result_fpras = FPRAS("lobbyists_db", "clients", ('client_id',),  "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE client_id = 38662) = 1 THEN 1 ELSE 0 END", 0.6, 0.4)
+        # result_fpras = FPRAS("traffic_crashes_chicago", "locations", ('street_name', 'street_no', 'street_direction'),  "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (street_name, street_no, street_direction) = ('ARCHER AVE', '3652', 'S')) = 1 THEN 1 ELSE 0 END", 0.7, 0.88)
+        # result_fpras = FPRAS('out1_2', ('public_experiment_q1_1_30_2_5.lineitem', 'public_experiment_q1_1_30_2_5.partsupp'), [('l_orderkey', 'l_linenumber'), ('ps_partkey', 'ps_suppkey')],
+        # "SELECT CASE WHEN (SELECT COUNT(*) FROM lineitem, partsupp WHERE lineitem.l_suppkey = partsupp.ps_suppkey AND partsupp.ps_availqty = 674 AND lineitem.l_tax = 0.000) = 1 THEN 1 ELSE 0 END",
+        # 0.6, 0.7)
 
-        print(result_fpras)
-        print('Experiment: ', i)
+        # print(result_fpras)
+        # print('Experiment: ', i)
     # print(results.count(1))
 
-#     result_sample = sampling('out1', ('lineitem', 'partsupp'),  )
-# SELECT *
-# FROM lineitem, partsupp
-# WHERE lineitem.l_suppkey = partsupp.ps_suppkey AND partsupp.ps_availqty = 674 AND lineitem.l_tax = 0.000
+    # print(toStr((998, 10143, 5146, 4, Decimal('6.00'), Decimal('6318.84'), Decimal('0.09'), Decimal('0.05'), 'R', 'F', datetime.date(1995, 3, 20), datetime.date(1994, 12, 27), datetime.date(1995, 4, 13), 'DELIVER IN PERSON        ', 'MAIL      ', 'refully accounts. carefully express ac')))
+        result_sample = sampling('out1_2', ('public_experiment_q1_1_30_2_5.lineitem', 'public_experiment_q1_1_30_2_5.partsupp'), [('l_orderkey', 'l_linenumber'), ('ps_partkey', 'ps_suppkey')], "SELECT CASE WHEN (SELECT COUNT(*) FROM lineitem, partsupp WHERE lineitem.l_suppkey = partsupp.ps_suppkey AND partsupp.ps_availqty = 674 AND lineitem.l_tax = 0.000) = 1 THEN 1 ELSE 0 END" )
 
-
-    # print(result_sample)
+    print(result_sample)
     # print(result_fpras)
 
     # cleanup()
