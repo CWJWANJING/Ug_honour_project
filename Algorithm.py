@@ -14,6 +14,7 @@ from decimal import Decimal
 import datetime
 import time
 from collections import defaultdict
+import numpy as np
 
 def fast_randint(size):
     """Returns a random integer between 0 and size
@@ -76,6 +77,16 @@ def blocks_repairs_formation(table, cols):    # for loop forms the blocks and in
     count_block = -1
     current_block = []
     repair_rows = []
+
+
+    # npTable = np.asarray(table)
+    # print(npTable)
+    # sys.exit()
+
+
+
+
+
     for idx, row in enumerate(table):
         new_prim_key = [row[col] for col in cols]
         if idx == 0 or new_prim_key == prev_prim_keys:
@@ -97,7 +108,19 @@ def blocks_repairs_formation(table, cols):    # for loop forms the blocks and in
     # print(f"Inserted {idx+1} rows, {count_block+2} blocks")
     return max_m, repair_rows
 
-def sampling(database, table_namesNschemas, primary_keys_multi, query):
+# def faster_fetch_schema(cursor, schema):
+#     cursor.execute(
+#         sql.SQL(
+#             "SELECT DISTINCT column_name, data_type, table_name FROM information_schema.columns "
+#             "WHERE table_schema = {} ORDER BY table_name;"
+#         ).format(sql.Literal(schema)))
+#     AllattributesNtypes = cursor.fetchall()
+#     schemas_table = np.asarray(AllattributesNtypes)
+#     schema_t = schemas_table[str(np.where(schemas_table[:,2] == 'lineitem'))]
+#     print(schema_t)
+#     return None
+
+def pre_sampling(database, table_namesNschemas, primary_keys_multi, query):
     try:
         cleanup()
     except Exception as e:
@@ -111,16 +134,22 @@ def sampling(database, table_namesNschemas, primary_keys_multi, query):
     conn_rnb = sqlite3.connect('RNB.db')    # create a new database for or storing blocks and storing repairs
     cursor_rnb = conn_rnb.cursor()
 
+    dict_attributesNtypes = defaultdict(int)
+    dict_tables = defaultdict(int)
+    tableNames = []
+
     Ms = []
     for i in range(0, len(table_namesNschemas)):
         schema, table_name= table_namesNschemas[i].split('.')
-
+        tableNames.append(table_name)
+        # faster_fetch_schema(cursor, schema)
         cursor.execute(
             sql.SQL(
                 "SELECT column_name, data_type FROM information_schema.columns "
                 "WHERE table_name = {} AND table_schema = {};"
             ).format(sql.Literal(table_name), sql.Literal(schema)))
         attributesNtypes = cursor.fetchall()
+        dict_attributesNtypes[table_name] = attributesNtypes
 
         create_repairs_blocks_table(attributesNtypes, table_name, cursor_rnb)
 
@@ -130,26 +159,41 @@ def sampling(database, table_namesNschemas, primary_keys_multi, query):
 
         cursor.execute(sql_str_loop)
         table = cursor.fetchall()
+        dict_tables[table_name] = table
 
-        cols = get_prim_key_cols(primary_keys_multi[i], attributesNtypes)
-        M, repair_rows = blocks_repairs_formation(table, cols)
-        insert_repair_table(repair_rows, table_name, cursor_rnb)
+    # result = list(cursor_rnb.execute(f'''{query}'''))
+    # toc = time.perf_counter()
+    # print((f"Sampling ran in {toc - tic:0.4f} seconds"))
+    #
+    # if result[0][0] == 1:
+    #     return (1,Ms)
+    # else:
+    #     return (0,Ms)
+
+    return dict_attributesNtypes, dict_tables, cursor_rnb, cursor, tableNames
+
+def sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query, tableNames, cursor_rnb):
+    Ms = []
+    tic = time.perf_counter()
+    for i in range(len(primary_keys_multi)):
+        cols = get_prim_key_cols(primary_keys_multi[i], dict_attributesNtypes[tableNames[i]])
+        M, repair_rows = blocks_repairs_formation(dict_tables[tableNames[i]], cols)
+        insert_repair_table(repair_rows, tableNames[i], cursor_rnb)
         Ms.append(M)
-
     result = list(cursor_rnb.execute(f'''{query}'''))
+    M = max(Ms)
     toc = time.perf_counter()
     print((f"Sampling ran in {toc - tic:0.4f} seconds"))
-
     if result[0][0] == 1:
-        return (1,Ms)
+        return (1,M)
     else:
-        return (0,Ms)
+        return (0,M)
 
 def FPRAS(database, table_namesNschemas,  primary_keys_multi, query, epsilon, delta):
-    # connect to the given database
-    conn = psycopg2.connect(database=database, user="postgres", password="230360", host="127.0.0.1", port="5432")
-    cursor = conn.cursor()
-
+    tic = time.perf_counter()
+    dict_attributesNtypes, dict_tables, cursor_rnb, cursor, tableNames = pre_sampling(database, table_namesNschemas, primary_keys_multi, query)
+    toc = time.perf_counter()
+    print((f"Pre_sampling ran in {toc - tic:0.4f} seconds"))
     # initialise keywidth
     k = 0
     for i in range(0, len(table_namesNschemas)):
@@ -167,7 +211,7 @@ def FPRAS(database, table_namesNschemas,  primary_keys_multi, query, epsilon, de
     print('k (keywidth): ', k)
 
     # get maximum size of the blocks
-    M = max(sampling(database, table_namesNschemas, primary_keys_multi, query)[1])
+    M = sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query, tableNames, cursor_rnb)[1]
     print('M (the maximum size of the blocks): ', M)
 
     mathLog = math.log(2/delta)
@@ -177,7 +221,7 @@ def FPRAS(database, table_namesNschemas,  primary_keys_multi, query, epsilon, de
 
     count = 0
     for i in range(0, NLoop):
-        count += sampling(database, table_namesNschemas, primary_keys_multi, query)[0]
+        count += sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query, tableNames, cursor_rnb)[0]
     print('The sum of sampling score is: ', count)
     print('The probability is: ')
     return count/N
@@ -186,7 +230,7 @@ if __name__ == "__main__":
     # result_sample = sampling('test_small.db', 'D', 'A', 'SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE A = 1) = 1 THEN 1 ELSE 0 END')
     # result_sample = sampling('test_small.db', 'D', 'A, B', 'SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (A,B) = (1,2)) = 1 THEN 1 ELSE 0 END')
     # results = []
-    for i in range(0,1):
+    # for i in range(0,1):
         # result_sample = sampling('food_inspections_chicago', 'facilities', ('license_', 'aka_name'), "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (license_, aka_name) =  (1299537, 'GALLERIA MARKET')) = 1 THEN 1 ELSE 0 END")[0]
         # result_sample = sampling("lobbyists_db", "clients", ('client_id',), "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE client_id = 38662) = 1 THEN 1 ELSE 0 END")[0]
         # result_sample = sampling("traffic_crashes_chicago", "locations", ('street_name', 'street_no', 'street_direction'),  "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (street_name, street_no, street_direction) = ('ARCHER AVE', '3652', 'S')) = 1 THEN 1 ELSE 0 END")[0]
@@ -194,7 +238,10 @@ if __name__ == "__main__":
         # results.append(result_sample)
         # result_fpras = FPRAS("lobbyists_db", "clients", ('client_id',),  "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE client_id = 38662) = 1 THEN 1 ELSE 0 END", 0.6, 0.4)
         # result_fpras = FPRAS("traffic_crashes_chicago", "locations", ('street_name', 'street_no', 'street_direction'),  "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (street_name, street_no, street_direction) = ('ARCHER AVE', '3652', 'S')) = 1 THEN 1 ELSE 0 END", 0.7, 0.88)
-        # result_fpras = FPRAS('out1_2', ('public_experiment_q1_1_30_2_5.lineitem', 'public_experiment_q1_1_30_2_5.partsupp'), [('l_orderkey', 'l_linenumber'), ('ps_partkey', 'ps_suppkey')],
+    result_fpras = FPRAS('out1_2', ('public_experiment_q1_1_30_2_5.lineitem', 'public_experiment_q1_1_30_2_5.partsupp'), [('l_orderkey', 'l_linenumber'), ('ps_partkey', 'ps_suppkey')],"SELECT CASE WHEN (SELECT COUNT(*) FROM lineitem, partsupp WHERE lineitem.l_suppkey = partsupp.ps_suppkey AND partsupp.ps_availqty = 674 AND lineitem.l_tax = 0.000) = 1 THEN 1 ELSE 0 END", 0.7, 0.7 )
+    # result_test_loop = test_loop('out1_2', ('public_experiment_q1_1_30_2_5.lineitem', 'public_experiment_q1_1_30_2_5.partsupp'), [('l_orderkey', 'l_linenumber'), ('ps_partkey', 'ps_suppkey')],"SELECT CASE WHEN (SELECT COUNT(*) FROM lineitem, partsupp WHERE lineitem.l_suppkey = partsupp.ps_suppkey AND partsupp.ps_availqty = 674 AND lineitem.l_tax = 0.000) = 1 THEN 1 ELSE 0 END" )
+
+
         # "SELECT CASE WHEN (SELECT COUNT(*) FROM lineitem, partsupp WHERE lineitem.l_suppkey = partsupp.ps_suppkey AND partsupp.ps_availqty = 674 AND lineitem.l_tax = 0.000) = 1 THEN 1 ELSE 0 END",
         # 0.6, 0.7)
 
@@ -203,9 +250,10 @@ if __name__ == "__main__":
     # print(results.count(1))
 
     # print(toStr((998, 10143, 5146, 4, Decimal('6.00'), Decimal('6318.84'), Decimal('0.09'), Decimal('0.05'), 'R', 'F', datetime.date(1995, 3, 20), datetime.date(1994, 12, 27), datetime.date(1995, 4, 13), 'DELIVER IN PERSON        ', 'MAIL      ', 'refully accounts. carefully express ac')))
-        result_sample = sampling('out1_2', ('public_experiment_q1_1_30_2_5.lineitem', 'public_experiment_q1_1_30_2_5.partsupp'), [('l_orderkey', 'l_linenumber'), ('ps_partkey', 'ps_suppkey')], "SELECT CASE WHEN (SELECT COUNT(*) FROM lineitem, partsupp WHERE lineitem.l_suppkey = partsupp.ps_suppkey AND partsupp.ps_availqty = 674 AND lineitem.l_tax = 0.000) = 1 THEN 1 ELSE 0 END" )
+        # result_sample = sampling('out1_2', ('public_experiment_q1_1_30_2_5.lineitem', 'public_experiment_q1_1_30_2_5.partsupp'), [('l_orderkey', 'l_linenumber'), ('ps_partkey', 'ps_suppkey')], "SELECT CASE WHEN (SELECT COUNT(*) FROM lineitem, partsupp WHERE lineitem.l_suppkey = partsupp.ps_suppkey AND partsupp.ps_availqty = 674 AND lineitem.l_tax = 0.000) = 1 THEN 1 ELSE 0 END" )
 
-    print(result_sample)
-    # print(result_fpras)
+    # print(result_test_loop)
+    # print(result_sample)
+    print(result_fpras)
 
     # cleanup()
