@@ -27,7 +27,8 @@ def fast_randint(size):
 def cleanup():
     os.remove('RNB.db')
 
-def get_prim_key_cols(prim_keys, attributesNtypes):    # get the location of primary keys
+# get the indexes of primary keys
+def get_prim_key_cols(prim_keys, attributesNtypes):
     cols = []
     for idx, row in enumerate(attributesNtypes):
         if row[0] in prim_keys:
@@ -35,9 +36,11 @@ def get_prim_key_cols(prim_keys, attributesNtypes):    # get the location of pri
     return cols
 
 def create_repairs_blocks_table(attributesNtypes, table_name, cursor_rnb):
-    create_statement_r = 'CREATE TABLE ' + table_name + ' ('    # format repairs 'create table' statement
+    # format repairs 'create table' statement
+    create_statement_r = 'CREATE TABLE ' + table_name + ' ('
 
-    for row in attributesNtypes:    # row[0] is the attribute, row[1] is the type
+    # row[0] is the attribute, row[1] is the type
+    for row in attributesNtypes:
         create_statement_r += '{} {} ,'.format(row[0], row[1])
     create_statement_r = create_statement_r[:-1] + ')'
     cursor_rnb.execute(create_statement_r)
@@ -51,7 +54,8 @@ def toStr(row):
     return new_row
 
 def insert_repair_table(repair_rows, table_name, cursor_rnb):
-    insert_statement = 'INSERT INTO ' + table_name +' VALUES '    # format 'insert into' statement
+    # format 'insert into' statement
+    insert_statement = 'INSERT INTO ' + table_name +' VALUES '
     count = 0
 
     for row in repair_rows:
@@ -70,7 +74,9 @@ def insert_repair_table(repair_rows, table_name, cursor_rnb):
                 insert_statement = insert_statement[:-1]
                 cursor_rnb.execute(insert_statement)
 
-def blocks_repairs_formation(table, cols):    # for loop forms the blocks and in the mean time, do random selection and forms the repair rows
+# for loop forms the blocks and in the mean time,
+# do random selection and forms the repair rows
+def blocks_repairs_formation(table, cols):
     prev_prim_keys = None
     max_m = 0
     m = 0
@@ -78,47 +84,29 @@ def blocks_repairs_formation(table, cols):    # for loop forms the blocks and in
     current_block = []
     repair_rows = []
 
-
-    # npTable = np.asarray(table)
-    # print(npTable)
-    # sys.exit()
-
-
-
-
-
     for idx, row in enumerate(table):
         new_prim_key = [row[col] for col in cols]
         if idx == 0 or new_prim_key == prev_prim_keys:
             m += 1
             current_block.append(row)
         else:
-            # this commented code is for finding the violated primary keys in the database
+            # this commented code is for finding the violated primary keys
+            # in the database
             # if m > 1:
             #     print(current_block)
             random_idx = fast_randint(m-1)
             repair_rows.append(current_block[random_idx])
             current_block = []
             current_block.append(row)
-            if m > max_m:    # if in new block, finish prev block m
+            # if in new block, finish prev block m
+            if m > max_m:
                 max_m = m
-            m = 1    # now in new block, so seen 1 row so far
+            # now in new block, so seen 1 row so far
+            m = 1
             count_block += 1
         prev_prim_keys = new_prim_key
     # print(f"Inserted {idx+1} rows, {count_block+2} blocks")
     return max_m, repair_rows
-
-# def faster_fetch_schema(cursor, schema):
-#     cursor.execute(
-#         sql.SQL(
-#             "SELECT DISTINCT column_name, data_type, table_name FROM information_schema.columns "
-#             "WHERE table_schema = {} ORDER BY table_name;"
-#         ).format(sql.Literal(schema)))
-#     AllattributesNtypes = cursor.fetchall()
-#     schemas_table = np.asarray(AllattributesNtypes)
-#     schema_t = schemas_table[str(np.where(schemas_table[:,2] == 'lineitem'))]
-#     print(schema_t)
-#     return None
 
 def pre_sampling(database, table_namesNschemas, primary_keys_multi, query):
     try:
@@ -128,10 +116,13 @@ def pre_sampling(database, table_namesNschemas, primary_keys_multi, query):
 
     tic = time.perf_counter()
 
-    conn = psycopg2.connect(database=database, user="postgres", password="230360", host="127.0.0.1", port="5432")    # connect to the given database
+    # connect to the given database
+    conn = psycopg2.connect(database=database, user="postgres",
+        password="230360", host="127.0.0.1", port="5432")
     cursor = conn.cursor()
 
-    conn_rnb = sqlite3.connect('RNB.db')    # create a new database for or storing blocks and storing repairs
+    # create a new database for or storing blocks and storing repairs
+    conn_rnb = sqlite3.connect('RNB.db')
     cursor_rnb = conn_rnb.cursor()
 
     dict_attributesNtypes = defaultdict(int)
@@ -160,15 +151,6 @@ def pre_sampling(database, table_namesNschemas, primary_keys_multi, query):
         cursor.execute(sql_str_loop)
         table = cursor.fetchall()
         dict_tables[table_name] = table
-
-    # result = list(cursor_rnb.execute(f'''{query}'''))
-    # toc = time.perf_counter()
-    # print((f"Sampling ran in {toc - tic:0.4f} seconds"))
-    #
-    # if result[0][0] == 1:
-    #     return (1,Ms)
-    # else:
-    #     return (0,Ms)
 
     return dict_attributesNtypes, dict_tables, cursor_rnb, cursor, tableNames
 
@@ -199,7 +181,8 @@ def FPRAS(database, table_namesNschemas,  primary_keys_multi, query, epsilon, de
     for i in range(0, len(table_namesNschemas)):
         schema, table_name = table_namesNschemas[i].split('.')
         # get all attributes
-        cursor.execute(sql.SQL("SELECT column_name FROM information_schema.columns WHERE table_name =  {} and table_schema = {};").format(sql.Literal(table_name), sql.Literal(schema)))
+        cursor.execute(sql.SQL("SELECT column_name FROM information_schema.columns "
+            "WHERE table_name =  {} and table_schema = {};").format(sql.Literal(table_name), sql.Literal(schema)))
         pre_attributes = cursor.fetchall()
         attributes = []
         for att in pre_attributes:
