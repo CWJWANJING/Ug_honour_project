@@ -224,7 +224,6 @@ if __name__ == "__main__":
     result_fpras = FPRAS('out1_2', ('public_experiment_q1_1_30_2_5.lineitem', 'public_experiment_q1_1_30_2_5.partsupp'), [('l_orderkey', 'l_linenumber'), ('ps_partkey', 'ps_suppkey')],"SELECT CASE WHEN (SELECT COUNT(*) FROM lineitem, partsupp WHERE lineitem.l_suppkey = partsupp.ps_suppkey AND partsupp.ps_availqty = 674 AND lineitem.l_tax = 0.000) = 1 THEN 1 ELSE 0 END", 0.7, 0.7 )
     # result_test_loop = test_loop('out1_2', ('public_experiment_q1_1_30_2_5.lineitem', 'public_experiment_q1_1_30_2_5.partsupp'), [('l_orderkey', 'l_linenumber'), ('ps_partkey', 'ps_suppkey')],"SELECT CASE WHEN (SELECT COUNT(*) FROM lineitem, partsupp WHERE lineitem.l_suppkey = partsupp.ps_suppkey AND partsupp.ps_availqty = 674 AND lineitem.l_tax = 0.000) = 1 THEN 1 ELSE 0 END" )
 
-
         # "SELECT CASE WHEN (SELECT COUNT(*) FROM lineitem, partsupp WHERE lineitem.l_suppkey = partsupp.ps_suppkey AND partsupp.ps_availqty = 674 AND lineitem.l_tax = 0.000) = 1 THEN 1 ELSE 0 END",
         # 0.6, 0.7)
 
