@@ -151,9 +151,10 @@ def pre_sampling(database, table_namesNschemas, primary_keys_multi, query):
         table = cursor.fetchall()
         dict_tables[table_name] = table
 
-    return dict_attributesNtypes, dict_tables, cursor_rnb, cursor, tableNames
+    return dict_attributesNtypes, dict_tables, conn_rnb, cursor, tableNames
 
-def sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query, tableNames, cursor_rnb):
+def sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query, tableNames, conn_rnb):
+    cursor_rnb = conn_rnb.cursor()
     Ms = []
     tic = time.perf_counter()
     for i in range(len(primary_keys_multi)):
@@ -161,13 +162,16 @@ def sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query,
         M, repair_rows = blocks_repairs_formation(dict_tables[tableNames[i]], cols)
         insert_repair_table(repair_rows, tableNames[i], cursor_rnb)
         Ms.append(M)
-    # cursor_rnb.execute(f'''{query}''')
-    cursor_rnb.execute('''select * FROM clients WHERE client_id = 38662''')
-    result = list(cursor_rnb.fetchall())
-    # print(result)
+    result = list(cursor_rnb.execute(f'''{query}'''))
+    conn_rnb.commit()
     M = max(Ms)
     toc = time.perf_counter()
-    print((f"Sampling ran in {toc - tic:0.4f} seconds"))
+    print(f"Sampling ran in {toc - tic:0.4f} seconds")
+
+    for n in tableNames:
+        cursor_rnb.execute(f'''drop table if exists {n}''')
+        create_repairs_blocks_table(dict_attributesNtypes[n], n, cursor_rnb)
+
     if result[0][0] == 1:
         return (1,M)
     else:
@@ -175,7 +179,7 @@ def sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query,
 
 def FPRAS(database, table_namesNschemas,  primary_keys_multi, query, epsilon, delta):
     tic = time.perf_counter()
-    dict_attributesNtypes, dict_tables, cursor_rnb, cursor, tableNames = pre_sampling(database, table_namesNschemas, primary_keys_multi, query)
+    dict_attributesNtypes, dict_tables, conn_rnb, cursor, tableNames = pre_sampling(database, table_namesNschemas, primary_keys_multi, query)
     toc = time.perf_counter()
     print((f"Pre_sampling ran in {toc - tic:0.4f} seconds"))
     # initialise keywidth
@@ -196,7 +200,7 @@ def FPRAS(database, table_namesNschemas,  primary_keys_multi, query, epsilon, de
     print('k (keywidth): ', k)
 
     # get maximum size of the blocks
-    M = sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query, tableNames, cursor_rnb)[1]
+    M = sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query, tableNames, conn_rnb)[1]
     print('M (the maximum size of the blocks): ', M)
 
     mathLog = math.log(2/delta)
@@ -206,10 +210,10 @@ def FPRAS(database, table_namesNschemas,  primary_keys_multi, query, epsilon, de
 
     count = 0
     for i in range(0, NLoop):
-        count += sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query, tableNames, cursor_rnb)[0]
+        count += sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query, tableNames, conn_rnb)[0]
     print('The sum of sampling score is: ', count)
     print('The probability is: ')
-    return count/N
+    return count/NLoop
 
 if __name__ == "__main__":
     # result_sample = sampling('test_small.db', 'D', 'A', 'SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE A = 1) = 1 THEN 1 ELSE 0 END')
