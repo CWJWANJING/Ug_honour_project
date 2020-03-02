@@ -107,7 +107,7 @@ def blocks_repairs_formation(table, cols):
     # print(f"Inserted {idx+1} rows, {count_block+2} blocks")
     return max_m, repair_rows
 
-def pre_sampling(database, table_namesNschemas, primary_keys_multi, query):
+def pre_sampling(database, table_namesNschemas, primary_keys_multi):
     try:
         cleanup()
     except Exception as e:
@@ -179,7 +179,7 @@ def sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query,
 
 def FPRAS(database, table_namesNschemas,  primary_keys_multi, query, epsilon, delta):
     tic = time.perf_counter()
-    dict_attributesNtypes, dict_tables, conn_rnb, cursor, tableNames = pre_sampling(database, table_namesNschemas, primary_keys_multi, query)
+    dict_attributesNtypes, dict_tables, conn_rnb, cursor, tableNames = pre_sampling(database, table_namesNschemas, primary_keys_multi)
     toc = time.perf_counter()
     print((f"Pre_sampling ran in {toc - tic:0.4f} seconds"))
     # initialise keywidth
@@ -215,6 +215,7 @@ def FPRAS(database, table_namesNschemas,  primary_keys_multi, query, epsilon, de
     print('The probability is: ')
     return count/NLoop
 
+
 if __name__ == "__main__":
     # result_sample = sampling('test_small.db', 'D', 'A', 'SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE A = 1) = 1 THEN 1 ELSE 0 END')
     # result_sample = sampling('test_small.db', 'D', 'A, B', 'SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (A,B) = (1,2)) = 1 THEN 1 ELSE 0 END')
@@ -222,18 +223,20 @@ if __name__ == "__main__":
     # for i in range(0,1):
         # result_sample = sampling('food_inspections_chicago', 'facilities', ('license_', 'aka_name'), "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (license_, aka_name) =  (1299537, 'GALLERIA MARKET')) = 1 THEN 1 ELSE 0 END")[0]
     result_fpras = FPRAS("lobbyists_db", ("public.clients",), [('client_id',)], "SELECT CASE WHEN (SELECT COUNT(*) FROM clients WHERE client_id = 38662) = 1 THEN 1 ELSE 0 END", 0.1, 0.75)
+
+
         # result_sample = sampling("traffic_crashes_chicago", "locations", ('street_name', 'street_no', 'street_direction'),  "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (street_name, street_no, street_direction) = ('ARCHER AVE', '3652', 'S')) = 1 THEN 1 ELSE 0 END")[0]
         # result_fpras = FPRAS('food_inspections_chicago', 'facilities', ('license_', 'aka_name'), "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (license_, aka_name) =  (2516677,'KIMCHI POP')) = 1 THEN 1 ELSE 0 END", 0.6, 0.5)
         # results.append(result_sample)
         # result_fpras = FPRAS("lobbyists_db", "clients", ('client_id',),  "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE client_id = 38662) = 1 THEN 1 ELSE 0 END", 0.6, 0.4)
         # result_fpras = FPRAS("traffic_crashes_chicago", "locations", ('street_name', 'street_no', 'street_direction'),  "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (street_name, street_no, street_direction) = ('ARCHER AVE', '3652', 'S')) = 1 THEN 1 ELSE 0 END", 0.7, 0.88)
-    # result_fpras = FPRAS('out1_2', ('public_experiment_q1_1_30_2_5.lineitem', 'public_experiment_q1_1_30_2_5.partsupp'), [('l_orderkey', 'l_linenumber'), ('ps_partkey', 'ps_suppkey')],"SELECT CASE WHEN (SELECT COUNT(*) FROM lineitem, partsupp WHERE lineitem.l_suppkey = partsupp.ps_suppkey AND partsupp.ps_availqty = 674 AND lineitem.l_tax = 0.000) = 1 THEN 1 ELSE 0 END", 0.7, 0.7 )
+    # result_fpras = FPRAS('out1_2', ('public_experiment_q1_1_30_2_5.lineitem', 'public_experiment_q1_1_30_2_5.partsupp'), [('l_orderkey', 'l_linenumber'), ('ps_partkey', 'ps_suppkey')],"SELECT CASE WHEN (SELECT COUNT(*) FROM lineitem, partsupp WHERE lineitem.l_suppkey = partsupp.ps_suppkey AND partsupp.ps_availqty = 674 AND lineitem.l_tax = 0.000) = 1 THEN 1 ELSE 0 END", 0.1, 0.75 )
     # result_test_loop = test_loop('out1_2', ('public_experiment_q1_1_30_2_5.lineitem', 'public_experiment_q1_1_30_2_5.partsupp'), [('l_orderkey', 'l_linenumber'), ('ps_partkey', 'ps_suppkey')],"SELECT CASE WHEN (SELECT COUNT(*) FROM lineitem, partsupp WHERE lineitem.l_suppkey = partsupp.ps_suppkey AND partsupp.ps_availqty = 674 AND lineitem.l_tax = 0.000) = 1 THEN 1 ELSE 0 END" )
 
         # "SELECT CASE WHEN (SELECT COUNT(*) FROM lineitem, partsupp WHERE lineitem.l_suppkey = partsupp.ps_suppkey AND partsupp.ps_availqty = 674 AND lineitem.l_tax = 0.000) = 1 THEN 1 ELSE 0 END",
         # 0.6, 0.7)
 
-    print(result_fpras)
+    # print(result_fpras)
         # print('Experiment: ', i)
     # print(results.count(1))
 
