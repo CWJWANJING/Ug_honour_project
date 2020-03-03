@@ -82,28 +82,29 @@ def random_query(database, primary_keys_multi):
     # random select from 'inner join', 'left join', 'right join', 'full join', 'comma join'
     opt_pre = ['inner join', 'left join', 'right join', 'full join', 'comma join']
     n_opt_pre = fast_randint(5)
-    n_tables = fast_randint(len(tableNames))
+    # +1 because we need at least one table to be selected
+    n_tables = fast_randint(len(tableNames))+1
     tables_filter = []
     if n_opt_pre == 4:
         # select random number of tables in the database
-        random_index_tables = np.unique(np.random.randint(0, 5, size=n_tables))
+        random_index_tables = np.unique(np.random.randint(1, len(tableNames), size=n_tables))
         random_tables = [tableNames[i] for i in random_index_tables]
         query_from = f" from {', '.join(random_tables)} "
         tables_filter = random_tables
     else:
-        table1 = tableNames[n_tables]
+        table1 = random.choice(tableNames)
         random_join_index = fast_randint(len(dict_tables_join[table1]))
-        join_type = opt_pre[n_opt_pre]
+        join_type = random.choice(opt_pre[:-1])
         tables_2 = list(dict_tables_join[table1].keys())
         table2 = tables_2[random_join_index]
         join_attributes = dict_tables_join[table1][table2]
-        random_idx = fast_randint(len(join_attributes))
-        j_att = join_attributes[random_idx]
+        j_att = random.choice(join_attributes)
         query_from = f" from {table1} t1 {join_type} {table2} t2 on t1.{j_att} = t2.{j_att}"
         tables_filter.append(table1)
         tables_filter.append(table2)
     # select randomly from 'all', 'distinct', 'random columns'
-    opt_1 = ['*', 'random_columns']
+    # opt_1 = ['*', 'random_columns']
+    # 1 represents for *, and else random_columns
     n_opt_1 = fast_randint(2)
     columns_select = ""
     if n_opt_1 == 1:
@@ -119,19 +120,35 @@ def random_query(database, primary_keys_multi):
         else:
             query_select = f"select distinct {columns_select}"
     else:
-        query_select = f"select {opt_1[n_opt_1]}"
+        query_select = f"select *"
     # randomly filter the values
-    # t_index = fast_randint(len(tables_filter))
-    # filter_t = tables_filter[t_index]
-    # c_index = fast_randint
-    # dict_tables_columns[filter_t]
-    # query_where = f" where {} = '{}'"
-    # query = query_select + query_from
-    print(query)
-    # random filtering based on real values
+    # randomly decide to filter how many set of values
+    filter_times = fast_randint(2)
+    query_where = " where "
+    if filter_times == 0:
+        filter_t = random.choice(tables_filter)
+        columns_filter = list(dict_tables_columns[filter_t].keys())
+        filter_c = random.choice(columns_filter)
+        values = dict_tables_columns[filter_t][filter_c]
+        filter_value = random.choice(values)
+        query_where += ' where {} = "{}";'.format(filter_c, filter_value)
+    else:
+        n_table_filter = fast_randint(len(tables_filter))+1
+        for i in range(n_table_filter):
+            current_table = tables_filter[i]
+            columns_filter = list(dict_tables_columns[current_table].keys())
+            n_columns_filter = fast_randint(3)+1
+            for n in range(n_columns_filter):
+                filter_c = random.choice(columns_filter)
+                columns_filter.remove(filter_c)
+                values = dict_tables_columns[current_table][filter_c]
+                filter_value = random.choice(values)
+                query_where += ' {} = "{}" and'.format(filter_c, filter_value)
+        query_where = query_where[:-3] + ';'
+    query = query_select + query_from + query_where
 
-
-    return None
+    return query
 
 if __name__ == "__main__":
-    print(random_query("lobbyists_db", [('client_id',),('compensation_id',),('contribution_id',),('employer_id',),('gift_id',),('lobbying_activity_id',),('lobbyist_id',)]))
+    for n in range(20):
+        print(random_query("lobbyists_db", [('client_id',),('compensation_id',),('contribution_id',),('employer_id',),('gift_id',),('lobbying_activity_id',),('lobbyist_id',)]))
