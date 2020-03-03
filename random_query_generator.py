@@ -12,8 +12,7 @@ def fast_randint(size):
     https://eli.thegreenplace.net/2018/slow-and-fast-methods-for-generating-random-integers-in-python/
     """
     return int(random.random()*size)
-
-def random_query(database, primary_keys_multi):
+def getAttributesNtypes(database):
     conn = psycopg2.connect(database=database, user="postgres",
         password="230360", host="127.0.0.1", port="5432")
     cursor = conn.cursor()
@@ -37,8 +36,9 @@ def random_query(database, primary_keys_multi):
             )
         attributesNtypes = cursor.fetchall()
         dict_attributesNtypes[n] = attributesNtypes
-    # extract the attributes from dict_attributesNtypes,
-    # so that we don't need to use fetchall again, since it takes lots of time
+    return cursor, tableNames, dict_attributesNtypes
+
+def dictionariesFormation(tableNames, dict_attributesNtypes, primary_keys_multi, cursor):
     dict_tables = {}
     dict_attributes = {}
     columns = []
@@ -49,13 +49,9 @@ def random_query(database, primary_keys_multi):
         # get all the table data, ordering by primary keys for forming blocks
         sql_str_loop =  f"SELECT * FROM {tableNames[i]} " \
                         f"ORDER BY {', '.join(primary_keys_multi[i])};"
-
         cursor.execute(sql_str_loop)
         table = cursor.fetchall()
         dict_tables[tableNames[i]] = table
-    # flatten columns to become single list of values
-    # flat_columns = [item for sublist in columns for item in sublist]
-
     # put values for each attribute into corresponding dictionary
     # use nested dictionary in this case
     dict_tables_columns = {}
@@ -65,7 +61,9 @@ def random_query(database, primary_keys_multi):
         for m in range(len(columns[i])):
             dict_columns[current_columns[m]] = [row_values[m] for row_values in dict_tables[tableNames[i]]]
         dict_tables_columns[tableNames[i]] = dict_columns
-    # now start query information
+    return dict_tables_columns, dict_attributes
+
+def joinPreparation(tableNames, dict_attributes):
     # get dict which stores tables have same attributes, prepare for join
     dict_tables_join = {}
     for table_i in tableNames:
@@ -79,6 +77,9 @@ def random_query(database, primary_keys_multi):
                     # pdb.set_trace()
                     dict_columns_join[table_n] = common
                     dict_tables_join[table_i] = dict_columns_join
+    return dict_tables_join
+
+def joinFormation(tableNames, dict_tables_join):
     # random select from 'inner join', 'left join', 'right join', 'full join', 'comma join'
     opt_pre = ['inner join', 'left join', 'right join', 'full join', 'comma join']
     n_opt_pre = fast_randint(5)
@@ -102,6 +103,9 @@ def random_query(database, primary_keys_multi):
         query_from = f" from {table1} t1 {join_type} {table2} t2 on t1.{j_att} = t2.{j_att}"
         tables_filter.append(table1)
         tables_filter.append(table2)
+    return tables_filter, query_from
+
+def selectFormation(tables_filter, dict_attributes):
     # select randomly from 'all', 'distinct', 'random columns'
     # opt_1 = ['*', 'random_columns']
     # 1 represents for *, and else random_columns
@@ -121,6 +125,9 @@ def random_query(database, primary_keys_multi):
             query_select = f"select distinct {columns_select}"
     else:
         query_select = f"select *"
+    return query_select
+
+def filterFormation(tables_filter, dict_tables_columns):
     # randomly filter the values
     # randomly decide to filter how many set of values
     filter_times = fast_randint(2)
@@ -145,8 +152,23 @@ def random_query(database, primary_keys_multi):
                 filter_value = random.choice(values)
                 query_where += ' {} = "{}" and'.format(filter_c, filter_value)
         query_where = query_where[:-3] + ';'
-    query = query_select + query_from + query_where
+    return query_where
 
+def random_query(database, primary_keys_multi):
+    cursor, tableNames, dict_attributesNtypes = getAttributesNtypes(database)
+    # extract the attributes from dict_attributesNtypes,
+    # so that we don't need to use fetchall again, since it takes lots of time
+    dict_tables_columns, dict_attributes = dictionariesFormation(tableNames, dict_attributesNtypes, primary_keys_multi, cursor)
+    # now start query formation
+    dict_tables_join = joinPreparation(tableNames, dict_attributes)
+    # query from part
+    tables_filter, query_from = joinFormation(tableNames, dict_tables_join)
+    # query select part
+    query_select = selectFormation(tables_filter, dict_attributes)
+    # query filter part
+    query_where = filterFormation(tables_filter, dict_tables_columns)
+    # concatenate them together
+    query = query_select + query_from + query_where
     return query
 
 if __name__ == "__main__":
