@@ -13,7 +13,6 @@ import decimal
 from decimal import Decimal
 import datetime
 import time
-from collections import defaultdict
 import numpy as np
 
 def fast_randint(size):
@@ -124,8 +123,8 @@ def pre_sampling(database, table_namesNschemas, primary_keys_multi):
     conn_rnb = sqlite3.connect('RNB.db')
     cursor_rnb = conn_rnb.cursor()
 
-    dict_attributesNtypes = defaultdict(int)
-    dict_tables = defaultdict(int)
+    dict_attributesNtypes = {}
+    dict_tables = {}
     tableNames = []
 
     Ms = []

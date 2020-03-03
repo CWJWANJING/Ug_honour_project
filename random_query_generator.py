@@ -12,6 +12,7 @@ def fast_randint(size):
     https://eli.thegreenplace.net/2018/slow-and-fast-methods-for-generating-random-integers-in-python/
     """
     return int(random.random()*size)
+
 def getAttributesNtypes(database):
     conn = psycopg2.connect(database=database, user="postgres",
         password="230360", host="127.0.0.1", port="5432")
