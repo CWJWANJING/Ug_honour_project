@@ -155,23 +155,28 @@ def filterFormation(tables_filter, dict_tables_columns):
         query_where = query_where[:-3] + ';'
     return query_where
 
-def random_query(database, primary_keys_multi):
+def random_query(database, primary_keys_multi, n):
     cursor, tableNames, dict_attributesNtypes = getAttributesNtypes(database)
     # extract the attributes from dict_attributesNtypes,
     # so that we don't need to use fetchall again, since it takes lots of time
     dict_tables_columns, dict_attributes = dictionariesFormation(tableNames, dict_attributesNtypes, primary_keys_multi, cursor)
-    # now start query formation
-    dict_tables_join = joinPreparation(tableNames, dict_attributes)
-    # query from part
-    tables_filter, query_from = joinFormation(tableNames, dict_tables_join)
-    # query select part
-    query_select = selectFormation(tables_filter, dict_attributes)
-    # query filter part
-    query_where = filterFormation(tables_filter, dict_tables_columns)
-    # concatenate them together
-    query = query_select + query_from + query_where
-    return query
+    queries = []
+    for n in range(n):
+        # now start query formation
+        dict_tables_join = joinPreparation(tableNames, dict_attributes)
+        # query from part
+        tables_filter, query_from = joinFormation(tableNames, dict_tables_join)
+        # query select part
+        query_select = selectFormation(tables_filter, dict_attributes)
+        # query filter part
+        query_where = filterFormation(tables_filter, dict_tables_columns)
+        # concatenate them together
+        query = query_select + query_from + query_where
+        queries.append(query)
+    return queries
 
 if __name__ == "__main__":
-    for n in range(20):
-        print(random_query("lobbyists_db", [('client_id',),('compensation_id',),('contribution_id',),('employer_id',),('gift_id',),('lobbying_activity_id',),('lobbyist_id',)]))
+        queries = random_query("lobbyists_db", [('client_id',),('compensation_id',),('contribution_id',),('employer_id',),('gift_id',),('lobbying_activity_id',),('lobbyist_id',)], 20)
+        for q in queries:
+            print(q)
+            print("\n")
