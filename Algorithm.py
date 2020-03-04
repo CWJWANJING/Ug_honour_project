@@ -26,15 +26,15 @@ def fast_randint(size):
     return int(random.random()*size)
 
 def cleanup(database):
-    conn_rnb = psycopg2.connect(
+    conn = psycopg2.connect(dbname="postgres",
       user="postgres", host="127.0.0.1",
       password='230360', port="5432")
 
-    conn_rnb.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
-    cursor_rnb = conn_rnb.cursor()
-    cursor_rnb.execute(sql.SQL("SELECT pg_terminate_backend (pg_stat_activity.pid)"
+    conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+    cursor = conn.cursor()
+    cursor.execute(sql.SQL("SELECT pg_terminate_backend (pg_stat_activity.pid)"
                             "FROM pg_stat_activity WHERE pg_stat_activity.datname = 'RNB';"))
-    cursor_rnb.execute(sql.SQL("DROP DATABASE {}").format(
+    cursor.execute(sql.SQL("DROP DATABASE {}").format(
         sql.Identifier('RNB'))
     )
 
@@ -121,7 +121,7 @@ def blocks_repairs_formation(table, cols):
 def pre_sampling(database):
     cleanup(database)
 
-    query, dict_tables, dict_attributesNtypes, tables_filter, dict_attributes, query = random_query(
+    dict_tables, dict_attributesNtypes, tables_filter, dict_attributes, query = random_query(
         "lobbyists_db", [('client_id',),('compensation_id',),('contribution_id',),('employer_id',),('gift_id',),('lobbying_activity_id',),('lobbyist_id',)])
 
     conn_rnb = psycopg2.connect(

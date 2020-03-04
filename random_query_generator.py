@@ -87,6 +87,7 @@ def joinFormation(tableNames, dict_tables_join):
     # +1 because we need at least one table to be selected
     n_tables = fast_randint(len(tableNames))+1
     tables_filter = []
+    j_attributes = []
     if n_opt_pre == 4:
         # select random number of tables in the database
         random_index_tables = np.unique(np.random.randint(1, len(tableNames), size=n_tables))
@@ -104,13 +105,15 @@ def joinFormation(tableNames, dict_tables_join):
         query_from = f" from {table1} t1 {join_type} {table2} t2 on t1.{j_att} = t2.{j_att}"
         tables_filter.append(table1)
         tables_filter.append(table2)
-    return tables_filter, query_from
+        j_attributes = join_attributes
+    return tables_filter, query_from, j_attributes
 
-def selectFormation(tables_filter, dict_attributes):
+def selectFormation(tables_filter, dict_attributes, j_attributes):
     # select randomly from 'all', 'distinct', 'random columns'
     # opt_1 = ['*', 'random_columns']
     # 1 represents for *, and else random_columns
-    n_opt_1 = fast_randint(2)
+    # n_opt_1 = fast_randint(2)
+    n_opt_1 = 1
     columns_select = ""
     if n_opt_1 == 1:
         n_opt_2 = fast_randint(2)
@@ -119,27 +122,40 @@ def selectFormation(tables_filter, dict_attributes):
             # doesn't consider cases when attribute names in tables collapse
             n_columns = fast_randint(len(dict_attributes[t]))
             columns_select.append(dict_attributes[t][n_columns])
-        columns_select = ', '.join(columns_select)
-        if n_opt_2 == 0:
-            query_select = f"select {columns_select}"
-        else:
-            query_select = f"select distinct {columns_select}"
+        if j_attributes != []:
+            common = list(set(j_attributes) & set(columns_select))
+            if common != []:
+                common = ["t1." + s for s in common]
+                common = ", ".join(common)
+                columns_select = [x for x in columns_select if x not in common]
+                columns_select = ", ".join(columns_select)
+                if n_opt_2 == 0:
+                    query_select = f"select {common}, {columns_select}"
+                else:
+                    query_select = f"select distinct {common}, {columns_select}"
+            else:
+                columns_select = ", ".join(columns_select)
+                if n_opt_2 == 0:
+                    query_select = f"select {columns_select}"
+                else:
+                    query_select = f"select distinct {columns_select}"
     else:
-        query_select = f"select *"
+        query_select = "select *"
     return query_select
 
 def filterFormation(tables_filter, dict_tables_columns):
     # randomly filter the values
     # randomly decide to filter how many set of values
     filter_times = fast_randint(2)
-    query_where = " where "
+    query_where = " where"
     if filter_times == 0:
         filter_t = random.choice(tables_filter)
         columns_filter = list(dict_tables_columns[filter_t].keys())
         filter_c = random.choice(columns_filter)
         values = dict_tables_columns[filter_t][filter_c]
         filter_value = random.choice(values)
-        query_where += ' where {} = "{}";'.format(filter_c, filter_value)
+        t_c = tables_filter.index(filter_t)+1
+        query_where += " t{}.{} = '{}';".format(t_c, filter_c, filter_value)
     else:
         n_table_filter = fast_randint(len(tables_filter))+1
         for i in range(n_table_filter):
@@ -151,7 +167,8 @@ def filterFormation(tables_filter, dict_tables_columns):
                 columns_filter.remove(filter_c)
                 values = dict_tables_columns[current_table][filter_c]
                 filter_value = random.choice(values)
-                query_where += ' {} = "{}" and'.format(filter_c, filter_value)
+                t_c = tables_filter.index(current_table)+1
+                query_where += " t{}.{} = '{}' and".format(t_c, filter_c, filter_value)
         query_where = query_where[:-3] + ';'
     return query_where
 
@@ -163,17 +180,15 @@ def random_query(database, primary_keys_multi):
     # now start query formation
     dict_tables_join = joinPreparation(tableNames, dict_attributes)
     # query from part
-    tables_filter, query_from = joinFormation(tableNames, dict_tables_join)
+    tables_filter, query_from, j_attributes = joinFormation(tableNames, dict_tables_join)
     # query select part
-    query_select = selectFormation(tables_filter, dict_attributes)
+    query_select = selectFormation(tables_filter, dict_attributes, j_attributes)
     # query filter part
     query_where = filterFormation(tables_filter, dict_tables_columns)
     # concatenate them together
     query = query_select + query_from + query_where
-    return query, dict_tables, dict_attributesNtypes, tables_filter, dict_attributes, query
+    return dict_tables, dict_attributesNtypes, tables_filter, dict_attributes, query
 
 if __name__ == "__main__":
-        queries, dict_tables, dict_attributesNtypes, cursor, tableNames = random_query("lobbyists_db", [('client_id',),('compensation_id',),('contribution_id',),('employer_id',),('gift_id',),('lobbying_activity_id',),('lobbyist_id',)])
-        for q in queries:
-            print(q)
-            print("\n")
+        dict_tables, dict_attributesNtypes, tables_filter, dict_attributes, query = random_query("lobbyists_db", [('client_id',),('compensation_id',),('contribution_id',),('employer_id',),('gift_id',),('lobbying_activity_id',),('lobbyist_id',)])
+        print(query)
