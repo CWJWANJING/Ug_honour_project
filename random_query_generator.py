@@ -88,12 +88,15 @@ def joinFormation(tableNames, dict_tables_join):
     n_tables = fast_randint(len(tableNames))+1
     tables_filter = []
     j_attributes = []
+    query_from = " from"
     if n_opt_pre == 4:
         # select random number of tables in the database
         random_index_tables = np.unique(np.random.randint(1, len(tableNames), size=n_tables))
         random_tables = [tableNames[i] for i in random_index_tables]
-        query_from = f" from {', '.join(random_tables)} "
+        for i in range(len(random_tables)):
+            query_from += f" {random_tables[i]} t{i+1},"
         tables_filter = random_tables
+        query_from = query_from[:-1]
     else:
         table1 = random.choice(tableNames)
         random_join_index = fast_randint(len(dict_tables_join[table1]))
@@ -114,25 +117,35 @@ def selectFormation(tables_filter, dict_attributes, j_attributes):
     # 1 represents for *, and else random_columns
     # n_opt_1 = fast_randint(2)
     n_opt_1 = 1
-    columns_select = ""
     if n_opt_1 == 1:
         n_opt_2 = fast_randint(2)
-        columns_select = []
         for t in tables_filter:
-            # doesn't consider cases when attribute names in tables collapse
+            columns_select = []
             n_columns = fast_randint(len(dict_attributes[t]))
             columns_select.append(dict_attributes[t][n_columns])
-        if j_attributes != []:
-            common = list(set(j_attributes) & set(columns_select))
-            if common != []:
-                common = ["t1." + s for s in common]
-                common = ", ".join(common)
-                columns_select = [x for x in columns_select if x not in common]
-                columns_select = ", ".join(columns_select)
-                if n_opt_2 == 0:
-                    query_select = f"select {common}, {columns_select}"
+            if j_attributes != []:
+                common = list(set(j_attributes) & set(columns_select))
+                if common != []:
+                    common = ["t1." + s for s in common]
+                    common = ", ".join(common)
+                    columns_select = [x for x in columns_select if x not in common]
+                    columns_select = ", ".join(columns_select)
+                    if n_opt_2 == 0:
+                        if columns_select != []:
+                            query_select = f"select {common}, {columns_select}"
+                        else:
+                            query_select = f"select {columns_select}"
+                    else:
+                        if columns_select != []:
+                            query_select = f"select distinct {common}, {columns_select}"
+                        else:
+                            query_select = f"select distinct {columns_select}"
                 else:
-                    query_select = f"select distinct {common}, {columns_select}"
+                    columns_select = ", ".join(columns_select)
+                    if n_opt_2 == 0:
+                        query_select = f"select {columns_select}"
+                    else:
+                        query_select = f"select distinct {columns_select}"
             else:
                 columns_select = ", ".join(columns_select)
                 if n_opt_2 == 0:

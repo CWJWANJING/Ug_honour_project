@@ -119,12 +119,15 @@ def blocks_repairs_formation(table, cols):
     return max_m, repair_rows
 
 def pre_sampling(database):
-    cleanup(database)
+    try:
+        cleanup(database)
+    except:
+        print("Could not clean up")
 
     dict_tables, dict_attributesNtypes, tables_filter, dict_attributes, query = random_query(
         "lobbyists_db", [('client_id',),('compensation_id',),('contribution_id',),('employer_id',),('gift_id',),('lobbying_activity_id',),('lobbyist_id',)])
 
-    conn_rnb = psycopg2.connect(
+    conn_rnb = psycopg2.connect(dbname="out1_2",
       user="postgres", host="127.0.0.1",
       password='230360', port="5432")
 
@@ -213,7 +216,7 @@ if __name__ == "__main__":
             "lobbyists" : 'lobbyist_id'
             }
     result_fpras = FPRAS("lobbyists_db", dict_primary_keys, "SELECT CASE WHEN (SELECT COUNT(*) FROM clients WHERE client_id = 38662) = 1 THEN 1 ELSE 0 END", 0.1, 0.75)
-
+    # cleanup("RNB")
 
         # result_sample = sampling("traffic_crashes_chicago", "locations", ('street_name', 'street_no', 'street_direction'),  "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (street_name, street_no, street_direction) = ('ARCHER AVE', '3652', 'S')) = 1 THEN 1 ELSE 0 END")[0]
         # result_fpras = FPRAS('food_inspections_chicago', 'facilities', ('license_', 'aka_name'), "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (license_, aka_name) =  (2516677,'KIMCHI POP')) = 1 THEN 1 ELSE 0 END", 0.6, 0.5)
@@ -235,6 +238,6 @@ if __name__ == "__main__":
 
     # print(result_test_loop)
     # print(result_sample)
-    print(result_fpras)
+    # print(result_fpras)
 
     # cleanup()
