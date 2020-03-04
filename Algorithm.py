@@ -9,6 +9,7 @@ import pdb
 import math
 import psycopg2
 from psycopg2 import sql
+from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 import decimal
 from decimal import Decimal
 import datetime
@@ -24,8 +25,18 @@ def fast_randint(size):
     """
     return int(random.random()*size)
 
-def cleanup():
-    os.remove('RNB.db')
+def cleanup(database):
+    conn_rnb = psycopg2.connect(
+      user="postgres", host="127.0.0.1",
+      password='230360', port="5432")
+
+    conn_rnb.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+    cursor_rnb = conn_rnb.cursor()
+    cursor_rnb.execute(sql.SQL("SELECT pg_terminate_backend (pg_stat_activity.pid)"
+                            "FROM pg_stat_activity WHERE pg_stat_activity.datname = 'RNB';"))
+    cursor_rnb.execute(sql.SQL("DROP DATABASE {}").format(
+        sql.Identifier('RNB'))
+    )
 
 # get the indexes of primary keys
 def get_prim_key_cols(prim_keys, attributesNtypes):
@@ -108,21 +119,26 @@ def blocks_repairs_formation(table, cols):
     return max_m, repair_rows
 
 def pre_sampling(database):
-    try:
-        cleanup()
-    except Exception as e:
-        print("Couldn't cleanup: {}".format(e))
+    cleanup(database)
 
-    query, dict_tables, dict_attributesNtypes, tables_filter, dict_attributes = random_query(
+    query, dict_tables, dict_attributesNtypes, tables_filter, dict_attributes, query = random_query(
         "lobbyists_db", [('client_id',),('compensation_id',),('contribution_id',),('employer_id',),('gift_id',),('lobbying_activity_id',),('lobbyist_id',)])
-    conn_rnb = sqlite3.connect('RNB.db')
+
+    conn_rnb = psycopg2.connect(
+      user="postgres", host="127.0.0.1",
+      password='230360', port="5432")
+
+    conn_rnb.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
     cursor_rnb = conn_rnb.cursor()
+    cursor_rnb.execute(sql.SQL("CREATE DATABASE {}").format(
+            sql.Identifier('RNB'))
+        )
 
     for t in tables_filter:
         attributesNtypes = dict_attributesNtypes[t]
         create_repairs_blocks_table(attributesNtypes, t, cursor_rnb)
 
-    return dict_attributesNtypes, dict_tables, conn_rnb, dict_attributes, tables_filter
+    return dict_attributesNtypes, dict_tables, conn_rnb, dict_attributes, tables_filter, query
 
 def sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query, tableNames, conn_rnb):
     cursor_rnb = conn_rnb.cursor()
@@ -150,7 +166,8 @@ def sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query,
 
 def FPRAS(database, dict_primary_keys, query, epsilon, delta):
     tic = time.perf_counter()
-    dict_attributesNtypes, dict_tables, conn_rnb, dict_attributes, tables_filter = pre_sampling(database)
+    dict_attributesNtypes, dict_tables, conn_rnb, dict_attributes, tables_filter, query = pre_sampling(database)
+    print(query)
     toc = time.perf_counter()
     print((f"Pre_sampling ran in {toc - tic:0.4f} seconds"))
     # initialise keywidth

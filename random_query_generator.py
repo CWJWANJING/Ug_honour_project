@@ -170,7 +170,7 @@ def random_query(database, primary_keys_multi):
     query_where = filterFormation(tables_filter, dict_tables_columns)
     # concatenate them together
     query = query_select + query_from + query_where
-    return query, dict_tables, dict_attributesNtypes, tables_filter, dict_attributes
+    return query, dict_tables, dict_attributesNtypes, tables_filter, dict_attributes, query
 
 if __name__ == "__main__":
         queries, dict_tables, dict_attributesNtypes, cursor, tableNames = random_query("lobbyists_db", [('client_id',),('compensation_id',),('contribution_id',),('employer_id',),('gift_id',),('lobbying_activity_id',),('lobbyist_id',)])
