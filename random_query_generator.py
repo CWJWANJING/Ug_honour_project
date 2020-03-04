@@ -62,7 +62,7 @@ def dictionariesFormation(tableNames, dict_attributesNtypes, primary_keys_multi,
         for m in range(len(columns[i])):
             dict_columns[current_columns[m]] = [row_values[m] for row_values in dict_tables[tableNames[i]]]
         dict_tables_columns[tableNames[i]] = dict_columns
-    return dict_tables_columns, dict_attributes
+    return dict_tables_columns, dict_attributes, dict_tables
 
 def joinPreparation(tableNames, dict_attributes):
     # get dict which stores tables have same attributes, prepare for join
@@ -155,28 +155,25 @@ def filterFormation(tables_filter, dict_tables_columns):
         query_where = query_where[:-3] + ';'
     return query_where
 
-def random_query(database, primary_keys_multi, n):
+def random_query(database, primary_keys_multi):
     cursor, tableNames, dict_attributesNtypes = getAttributesNtypes(database)
     # extract the attributes from dict_attributesNtypes,
     # so that we don't need to use fetchall again, since it takes lots of time
-    dict_tables_columns, dict_attributes = dictionariesFormation(tableNames, dict_attributesNtypes, primary_keys_multi, cursor)
-    queries = []
-    for n in range(n):
-        # now start query formation
-        dict_tables_join = joinPreparation(tableNames, dict_attributes)
-        # query from part
-        tables_filter, query_from = joinFormation(tableNames, dict_tables_join)
-        # query select part
-        query_select = selectFormation(tables_filter, dict_attributes)
-        # query filter part
-        query_where = filterFormation(tables_filter, dict_tables_columns)
-        # concatenate them together
-        query = query_select + query_from + query_where
-        queries.append(query)
-    return queries
+    dict_tables_columns, dict_attributes, dict_tables = dictionariesFormation(tableNames, dict_attributesNtypes, primary_keys_multi, cursor)
+    # now start query formation
+    dict_tables_join = joinPreparation(tableNames, dict_attributes)
+    # query from part
+    tables_filter, query_from = joinFormation(tableNames, dict_tables_join)
+    # query select part
+    query_select = selectFormation(tables_filter, dict_attributes)
+    # query filter part
+    query_where = filterFormation(tables_filter, dict_tables_columns)
+    # concatenate them together
+    query = query_select + query_from + query_where
+    return query, dict_tables, dict_attributesNtypes, tables_filter, dict_attributes
 
 if __name__ == "__main__":
-        queries = random_query("lobbyists_db", [('client_id',),('compensation_id',),('contribution_id',),('employer_id',),('gift_id',),('lobbying_activity_id',),('lobbyist_id',)], 20)
+        queries, dict_tables, dict_attributesNtypes, cursor, tableNames = random_query("lobbyists_db", [('client_id',),('compensation_id',),('contribution_id',),('employer_id',),('gift_id',),('lobbying_activity_id',),('lobbyist_id',)])
         for q in queries:
             print(q)
             print("\n")

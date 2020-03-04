@@ -14,6 +14,7 @@ from decimal import Decimal
 import datetime
 import time
 import numpy as np
+from random_query_generator import *
 
 def fast_randint(size):
     """Returns a random integer between 0 and size
@@ -106,51 +107,22 @@ def blocks_repairs_formation(table, cols):
     # print(f"Inserted {idx+1} rows, {count_block+2} blocks")
     return max_m, repair_rows
 
-def pre_sampling(database, table_namesNschemas, primary_keys_multi):
+def pre_sampling(database):
     try:
         cleanup()
     except Exception as e:
         print("Couldn't cleanup: {}".format(e))
 
-    tic = time.perf_counter()
-
-    # connect to the given database
-    conn = psycopg2.connect(database=database, user="postgres",
-        password="230360", host="127.0.0.1", port="5432")
-    cursor = conn.cursor()
-
-    # create a new database for or storing blocks and storing repairs
+    query, dict_tables, dict_attributesNtypes, tables_filter, dict_attributes = random_query(
+        "lobbyists_db", [('client_id',),('compensation_id',),('contribution_id',),('employer_id',),('gift_id',),('lobbying_activity_id',),('lobbyist_id',)])
     conn_rnb = sqlite3.connect('RNB.db')
     cursor_rnb = conn_rnb.cursor()
 
-    dict_attributesNtypes = {}
-    dict_tables = {}
-    tableNames = []
+    for t in tables_filter:
+        attributesNtypes = dict_attributesNtypes[t]
+        create_repairs_blocks_table(attributesNtypes, t, cursor_rnb)
 
-    Ms = []
-    for i in range(0, len(table_namesNschemas)):
-        schema, table_name= table_namesNschemas[i].split('.')
-        tableNames.append(table_name)
-        # faster_fetch_schema(cursor, schema)
-        cursor.execute(
-            sql.SQL(
-                "SELECT column_name, data_type FROM information_schema.columns "
-                "WHERE table_name = {} AND table_schema = {};"
-            ).format(sql.Literal(table_name), sql.Literal(schema)))
-        attributesNtypes = cursor.fetchall()
-        dict_attributesNtypes[table_name] = attributesNtypes
-
-        create_repairs_blocks_table(attributesNtypes, table_name, cursor_rnb)
-
-        # get all the table data, ordering by primary keys for forming blocks
-        sql_str_loop =  f"SELECT * FROM {table_namesNschemas[i]} " \
-                        f"ORDER BY {', '.join(primary_keys_multi[i])};"
-
-        cursor.execute(sql_str_loop)
-        table = cursor.fetchall()
-        dict_tables[table_name] = table
-
-    return dict_attributesNtypes, dict_tables, conn_rnb, cursor, tableNames
+    return dict_attributesNtypes, dict_tables, conn_rnb, dict_attributes, tables_filter
 
 def sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query, tableNames, conn_rnb):
     cursor_rnb = conn_rnb.cursor()
@@ -176,30 +148,23 @@ def sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query,
     else:
         return (0,M)
 
-def FPRAS(database, table_namesNschemas,  primary_keys_multi, query, epsilon, delta):
+def FPRAS(database, dict_primary_keys, query, epsilon, delta):
     tic = time.perf_counter()
-    dict_attributesNtypes, dict_tables, conn_rnb, cursor, tableNames = pre_sampling(database, table_namesNschemas, primary_keys_multi)
+    dict_attributesNtypes, dict_tables, conn_rnb, dict_attributes, tables_filter = pre_sampling(database)
     toc = time.perf_counter()
     print((f"Pre_sampling ran in {toc - tic:0.4f} seconds"))
     # initialise keywidth
     k = 0
-    for i in range(0, len(table_namesNschemas)):
-        schema, table_name = table_namesNschemas[i].split('.')
-        # get all attributes
-        cursor.execute(sql.SQL("SELECT column_name FROM information_schema.columns "
-            "WHERE table_name =  {} and table_schema = {};").format(sql.Literal(table_name), sql.Literal(schema)))
-        pre_attributes = cursor.fetchall()
-        attributes = []
-        for att in pre_attributes:
-            attributes.append(att[0])
-
+    primary_keys_multi = []
+    for n in tables_filter:
+        primary_keys_multi.append(dict_primary_keys[n])
+        attributes = dict_attributes[n]
         for a in attributes:
             if a in query:
                 k += 1
     print('k (keywidth): ', k)
-
     # get maximum size of the blocks
-    M = sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query, tableNames, conn_rnb)[1]
+    M = sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query, tables_filter, conn_rnb)[1]
     print('M (the maximum size of the blocks): ', M)
 
     mathLog = math.log(2/delta)
@@ -209,7 +174,7 @@ def FPRAS(database, table_namesNschemas,  primary_keys_multi, query, epsilon, de
 
     count = 0
     for i in range(0, NLoop):
-        count += sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query, tableNames, conn_rnb)[0]
+        count += sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query, tables_filter, conn_rnb)[0]
     print('The sum of sampling score is: ', count)
     print('The probability is: ')
     return count/NLoop
@@ -221,7 +186,16 @@ if __name__ == "__main__":
     # results = []
     # for i in range(0,1):
         # result_sample = sampling('food_inspections_chicago', 'facilities', ('license_', 'aka_name'), "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (license_, aka_name) =  (1299537, 'GALLERIA MARKET')) = 1 THEN 1 ELSE 0 END")[0]
-    result_fpras = FPRAS("lobbyists_db", ("public.clients",), [('client_id',)], "SELECT CASE WHEN (SELECT COUNT(*) FROM clients WHERE client_id = 38662) = 1 THEN 1 ELSE 0 END", 0.1, 0.75)
+    dict_primary_keys = {
+            "clients": 'client_id',
+            "compensations" : 'compensation_id' ,
+            "contributions" : 'contribution_id',
+            "employers" : 'employer_id',
+            "gifts" : 'gift_id',
+            "lobbying_activities" : 'lobbying_activity_id',
+            "lobbyists" : 'lobbyist_id'
+            }
+    result_fpras = FPRAS("lobbyists_db", dict_primary_keys, "SELECT CASE WHEN (SELECT COUNT(*) FROM clients WHERE client_id = 38662) = 1 THEN 1 ELSE 0 END", 0.1, 0.75)
 
 
         # result_sample = sampling("traffic_crashes_chicago", "locations", ('street_name', 'street_no', 'street_direction'),  "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (street_name, street_no, street_direction) = ('ARCHER AVE', '3652', 'S')) = 1 THEN 1 ELSE 0 END")[0]
