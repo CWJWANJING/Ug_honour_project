@@ -25,7 +25,7 @@ def fast_randint(size):
     """
     return int(random.random()*size)
 
-def cleanup(database):
+def cleanup():
     conn = psycopg2.connect(dbname="postgres",
       user="postgres", host="127.0.0.1",
       password='230360', port="5432")
@@ -34,9 +34,10 @@ def cleanup(database):
     cursor = conn.cursor()
     cursor.execute(sql.SQL("SELECT pg_terminate_backend (pg_stat_activity.pid)"
                             "FROM pg_stat_activity WHERE pg_stat_activity.datname = 'RNB';"))
-    cursor.execute(sql.SQL("DROP DATABASE {}").format(
-        sql.Identifier('RNB'))
-    )
+    try:
+        cursor.execute(sql.SQL("DROP DATABASE \"RNB\""))
+    except psycopg2.errors.InvalidCatalogName as e:
+        print(f"Couldn't clean up RNB: {e}")
 
 # get the indexes of primary keys
 def get_prim_key_cols(prim_keys, attributesNtypes):
@@ -52,8 +53,9 @@ def create_repairs_blocks_table(attributesNtypes, table_name, cursor_rnb):
 
     # row[0] is the attribute, row[1] is the type
     for row in attributesNtypes:
-        create_statement_r += '{} {} ,'.format(row[0], row[1])
-    create_statement_r = create_statement_r[:-1] + ')'
+        create_statement_r += '{} {}, '.format(row[0], row[1])
+    create_statement_r = create_statement_r[:-2] + ')'
+    print(create_statement_r)
     cursor_rnb.execute(create_statement_r)
 
 def toStr(row):
@@ -118,24 +120,29 @@ def blocks_repairs_formation(table, cols):
     # print(f"Inserted {idx+1} rows, {count_block+2} blocks")
     return max_m, repair_rows
 
-def pre_sampling(database):
-    try:
-        cleanup(database)
-    except:
-        print("Could not clean up")
-
-    dict_tables, dict_attributesNtypes, tables_filter, dict_attributes, query = random_query(
-        "lobbyists_db", [('client_id',),('compensation_id',),('contribution_id',),('employer_id',),('gift_id',),('lobbying_activity_id',),('lobbyist_id',)])
-
-    conn_rnb = psycopg2.connect(dbname="out1_2",
+def create_and_switch_to_rnb():
+    conn_rnb = psycopg2.connect(dbname="postgres",
       user="postgres", host="127.0.0.1",
       password='230360', port="5432")
 
     conn_rnb.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
     cursor_rnb = conn_rnb.cursor()
-    cursor_rnb.execute(sql.SQL("CREATE DATABASE {}").format(
-            sql.Identifier('RNB'))
-        )
+    cursor_rnb.execute(sql.SQL("CREATE DATABASE \"RNB\""))
+
+    conn_rnb.close()
+    conn_rnb = psycopg2.connect(dbname="RNB",
+      user="postgres", host="127.0.0.1",
+      password='230360', port="5432")
+
+    return conn_rnb
+
+def pre_sampling(database):
+
+    dict_tables, dict_attributesNtypes, tables_filter, dict_attributes, query = random_query(
+        "lobbyists_db", [('client_id',),('compensation_id',),('contribution_id',),('employer_id',),('gift_id',),('lobbying_activity_id',),('lobbyist_id',)])
+
+    conn_rnb = create_and_switch_to_rnb()
+    cursor_rnb = conn_rnb.cursor()
 
     for t in tables_filter:
         attributesNtypes = dict_attributesNtypes[t]
@@ -197,6 +204,7 @@ def FPRAS(database, dict_primary_keys, query, epsilon, delta):
         count += sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query, tables_filter, conn_rnb)[0]
     print('The sum of sampling score is: ', count)
     print('The probability is: ')
+    cleanup()
     return count/NLoop
 
 
@@ -206,6 +214,7 @@ if __name__ == "__main__":
     # results = []
     # for i in range(0,1):
         # result_sample = sampling('food_inspections_chicago', 'facilities', ('license_', 'aka_name'), "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (license_, aka_name) =  (1299537, 'GALLERIA MARKET')) = 1 THEN 1 ELSE 0 END")[0]
+    cleanup()
     dict_primary_keys = {
             "clients": 'client_id',
             "compensations" : 'compensation_id' ,
@@ -216,7 +225,7 @@ if __name__ == "__main__":
             "lobbyists" : 'lobbyist_id'
             }
     result_fpras = FPRAS("lobbyists_db", dict_primary_keys, "SELECT CASE WHEN (SELECT COUNT(*) FROM clients WHERE client_id = 38662) = 1 THEN 1 ELSE 0 END", 0.1, 0.75)
-    # cleanup("RNB")
+
 
         # result_sample = sampling("traffic_crashes_chicago", "locations", ('street_name', 'street_no', 'street_direction'),  "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (street_name, street_no, street_direction) = ('ARCHER AVE', '3652', 'S')) = 1 THEN 1 ELSE 0 END")[0]
         # result_fpras = FPRAS('food_inspections_chicago', 'facilities', ('license_', 'aka_name'), "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (license_, aka_name) =  (2516677,'KIMCHI POP')) = 1 THEN 1 ELSE 0 END", 0.6, 0.5)
@@ -239,5 +248,3 @@ if __name__ == "__main__":
     # print(result_test_loop)
     # print(result_sample)
     # print(result_fpras)
-
-    # cleanup()
