@@ -42,8 +42,10 @@ def getAttributesNtypes(database):
 def dictionariesFormation(tableNames, dict_attributesNtypes, primary_keys_multi, cursor):
     dict_tables = {}
     dict_attributes = {}
+    dict_primary_keys = {}
     columns = []
     for i in range(len(tableNames)):
+        dict_primary_keys[tableNames[i]] = primary_keys_multi[i]
         each_columns = [attributesNtypes[0] for attributesNtypes in dict_attributesNtypes[tableNames[i]]]
         columns.append(each_columns)
         dict_attributes[tableNames[i]] = each_columns
@@ -62,7 +64,7 @@ def dictionariesFormation(tableNames, dict_attributesNtypes, primary_keys_multi,
         for m in range(len(columns[i])):
             dict_columns[current_columns[m]] = [row_values[m] for row_values in dict_tables[tableNames[i]]]
         dict_tables_columns[tableNames[i]] = dict_columns
-    return dict_tables_columns, dict_attributes, dict_tables
+    return dict_tables_columns, dict_attributes, dict_tables, dict_primary_keys
 
 def joinPreparation(tableNames, dict_attributes):
     # get dict which stores tables have same attributes, prepare for join
@@ -111,50 +113,102 @@ def joinFormation(tableNames, dict_tables_join):
         j_attributes = join_attributes
     return tables_filter, query_from, j_attributes
 
-def selectFormation(tables_filter, dict_attributes, j_attributes):
-    # select randomly from 'all', 'distinct', 'random columns'
-    # opt_1 = ['*', 'random_columns']
-    # 1 represents for *, and else random_columns
-    # n_opt_1 = fast_randint(2)
-    n_opt_1 = 1
-    if n_opt_1 == 1:
-        n_opt_2 = fast_randint(2)
-        for t in tables_filter:
-            columns_select = []
-            n_columns = fast_randint(len(dict_attributes[t]))
-            columns_select.append(dict_attributes[t][n_columns])
-            if j_attributes != []:
-                common = list(set(j_attributes) & set(columns_select))
-                if common != []:
-                    common = ["t1." + s for s in common]
-                    common = ", ".join(common)
-                    columns_select = [x for x in columns_select if x not in common]
-                    columns_select = ", ".join(columns_select)
+def selectFormation(tables_filter, dict_attributes, j_attributes, dict_primary_keys):
+    # select randomly from ''distinct', 'random columns'
+    n_opt_2 = fast_randint(2)
+    columns_select = []
+    dict_vio_select = {}
+    for t in tables_filter:
+        n_columns = fast_randint(len(dict_attributes[t])-1)+1
+        columns_select.append(dict_attributes[t][n_columns])
+        dict_vio_select[t] = dict_attributes[t][n_columns]
+    n_prim = fast_randint(len(tables_filter))
+    tuple_table = tables_filter[n_prim]
+    columns_prims = dict_primary_keys[tuple_table]
+    print(f"columns_prims {columns_prims} \n")
+    print(f"dict_vio_select {dict_vio_select}")
+    list2 = []
+    list2.append(dict_vio_select[tuple_table])
+    print(f"list2: {list2} \n")
+    tuple_attributes = list(set(columns_prims) | set(list2))
+    print(f"tuple: {tuple_attributes} \n")
+    columns_select = set(columns_select)
+    if j_attributes != []:
+        common = list(set(j_attributes) & set(columns_select))
+        if common != []:
+            comm = list(set(common)&set(columns_prims))
+            if comm != []:
+                columns_prims = [x for x in columns_prims if x not in comm]
+                print(columns_prims)
+                print("1")
+                common = ["t1." + s for s in common]
+                common = ", ".join(common)
+                columns_select = [x for x in columns_select if x not in common]
+                columns_select = ", ".join(columns_select)
+                if columns_prims != []:
+                    print("2")
+                    columns_prims = [x for x in columns_prims]
+                    columns_prims = ", ".join(columns_prims)
                     if n_opt_2 == 0:
-                        if columns_select != []:
+                        if columns_select != {}:
+                            query_select = f"select {common}, {columns_prims}, {columns_select}"
+                        else:
+                            query_select = f"select {columns_prims}, {columns_select}"
+                    else:
+                        if columns_select != {}:
+                            query_select = f"select distinct {common}, {columns_prims}, {columns_select}"
+                        else:
+                            query_select = f"select distinct {columns_prims}, {columns_select}"
+                else:
+                    print("3")
+                    if n_opt_2 == 0:
+                        if columns_select != {}:
                             query_select = f"select {common}, {columns_select}"
                         else:
                             query_select = f"select {columns_select}"
                     else:
-                        if columns_select != []:
+                        if columns_select != {}:
                             query_select = f"select distinct {common}, {columns_select}"
                         else:
                             query_select = f"select distinct {columns_select}"
-                else:
-                    columns_select = ", ".join(columns_select)
-                    if n_opt_2 == 0:
-                        query_select = f"select {columns_select}"
-                    else:
-                        query_select = f"select distinct {columns_select}"
             else:
-                columns_select = ", ".join(columns_select)
+                common = ["t1." + s for s in common]
+                common = ", ".join(common)
+                columns_select = [x for x in columns_select if x not in common]
+                columns_prims = [x for x in columns_prims]
+                columns_prims = ", ".join(columns_prims)
+                print(columns_prims)
+                print("4")
                 if n_opt_2 == 0:
-                    query_select = f"select {columns_select}"
+                    if columns_select != []:
+                        print("8")
+                        columns_select = ", ".join(columns_select)
+                        print(common+columns_prims+columns_select)
+                        query_select = f"select {common}, {columns_prims}, {columns_select}"
+                    else:
+                        print("7")
+                        query_select = f"select {columns_prims} "
                 else:
-                    query_select = f"select distinct {columns_select}"
+                    if columns_select != []:
+                        print("5")
+                        columns_select = ", ".join(columns_select)
+                        query_select = f"select distinct {common}, {columns_prims}, {columns_select}"
+                    else:
+                        print("6")
+                        query_select = f"select distinct {columns_prims} "
+        else:
+            columns_select = ", ".join(columns_select)
+            if n_opt_2 == 0:
+                query_select = f"select {columns_select}"
+            else:
+                query_select = f"select distinct {columns_select}"
     else:
-        query_select = "select *"
-    return query_select
+        columns_select = ", ".join(columns_select)
+        if n_opt_2 == 0:
+            query_select = f"select {columns_select}"
+        else:
+            query_select = f"select distinct {columns_select}"
+    return query_select, tuple_attributes, tuple_table
 
 def filterFormation(tables_filter, dict_tables_columns):
     # randomly filter the values
@@ -185,21 +239,35 @@ def filterFormation(tables_filter, dict_tables_columns):
         query_where = query_where[:-3] + ';'
     return query_where
 
+def random_violate_tuple(tuple_attributes, tuple_table, dict_tables_columns):
+    tuple = []
+    print(tuple_table)
+    for t in range(len(tuple_attributes)):
+        tuple_att = tuple_attributes[t]
+        rows = dict_tables_columns[tuple_table][tuple_att]
+        index = fast_randint(len(rows))
+        tuple.append(rows[index])
+    print(tuple)
+    return tuple
+
 def random_query(database, primary_keys_multi):
     cursor, tableNames, dict_attributesNtypes = getAttributesNtypes(database)
     # extract the attributes from dict_attributesNtypes,
     # so that we don't need to use fetchall again, since it takes lots of time
-    dict_tables_columns, dict_attributes, dict_tables = dictionariesFormation(tableNames, dict_attributesNtypes, primary_keys_multi, cursor)
+    dict_tables_columns, dict_attributes, dict_tables, dict_primary_keys = dictionariesFormation(tableNames, dict_attributesNtypes, primary_keys_multi, cursor)
     # now start query formation
     dict_tables_join = joinPreparation(tableNames, dict_attributes)
     # query from part
     tables_filter, query_from, j_attributes = joinFormation(tableNames, dict_tables_join)
     # query select part
-    query_select = selectFormation(tables_filter, dict_attributes, j_attributes)
+    query_select, tuple_attributes, tuple_table = selectFormation(tables_filter, dict_attributes, j_attributes, dict_primary_keys)
     # query filter part
     query_where = filterFormation(tables_filter, dict_tables_columns)
     # concatenate them together
     query = query_select + query_from + query_where
+
+    tuple = random_violate_tuple(tuple_attributes, tuple_table, dict_tables_columns)
+    print(tuple)
     return dict_tables, dict_attributesNtypes, tables_filter, dict_attributes, query
 
 if __name__ == "__main__":
