@@ -113,6 +113,9 @@ def joinFormation(tableNames, dict_tables_join):
         j_attributes = join_attributes
     return tables_filter, query_from, j_attributes
 
+# def clean_select_att():
+#     return
+
 def selectFormation(tables_filter, dict_attributes, j_attributes, dict_primary_keys):
     # select randomly from ''distinct', 'random columns'
     n_opt_2 = fast_randint(2)
@@ -136,78 +139,77 @@ def selectFormation(tables_filter, dict_attributes, j_attributes, dict_primary_k
     if j_attributes != []:
         common = list(set(j_attributes) & set(columns_select))
         if common != []:
-            comm = list(set(common)&set(columns_prims))
+            comm = list(set(common)&set(tuple_attributes))
             if comm != []:
-                columns_prims = [x for x in columns_prims if x not in comm]
-                print(columns_prims)
+                tt = [x for x in tuple_attributes if x not in comm]
+                print(tt)
                 print("1")
                 common = ["t1." + s for s in common]
                 common = ", ".join(common)
                 columns_select = [x for x in columns_select if x not in common]
-                columns_select = ", ".join(columns_select)
-                if columns_prims != []:
-                    print("2")
-                    columns_prims = [x for x in columns_prims]
-                    columns_prims = ", ".join(columns_prims)
-                    if n_opt_2 == 0:
-                        if columns_select != {}:
-                            query_select = f"select {common}, {columns_prims}, {columns_select}"
-                        else:
-                            query_select = f"select {columns_prims}, {columns_select}"
+                print("2")
+                tt = ", ".join(tt)
+                if n_opt_2 == 0:
+                    if columns_select != []:
+                        print("18+")
+                        columns_select = ", ".join(columns_select)
+                        query_select = f"select {common}, {tt}, {columns_select}"
                     else:
-                        if columns_select != {}:
-                            query_select = f"select distinct {common}, {columns_prims}, {columns_select}"
-                        else:
-                            query_select = f"select distinct {columns_prims}, {columns_select}"
+                        print("21+")
+                        query_select = f"select {tt}, {common}"
+                # if 'distinct' is chosen
                 else:
-                    print("3")
-                    if n_opt_2 == 0:
-                        if columns_select != {}:
-                            query_select = f"select {common}, {columns_select}"
-                        else:
-                            query_select = f"select {columns_select}"
+                    if columns_select != []:
+                        print("19+")
+                        columns_select = ", ".join(columns_select)
+                        query_select = f"select distinct {common}, {tt}, {columns_select}"
                     else:
-                        if columns_select != {}:
-                            query_select = f"select distinct {common}, {columns_select}"
-                        else:
-                            query_select = f"select distinct {columns_select}"
+                        print("20+")
+                        query_select = f"select distinct {tt}, {common}"
+            # if comm for common and tuple_attributes == none
             else:
                 common = ["t1." + s for s in common]
                 common = ", ".join(common)
                 columns_select = [x for x in columns_select if x not in common]
-                columns_prims = [x for x in columns_prims]
-                columns_prims = ", ".join(columns_prims)
-                print(columns_prims)
+                union = list(set(tuple_attributes) | set(columns_select))
+                union = ", ".join(union)
                 print("4")
                 if n_opt_2 == 0:
                     if columns_select != []:
-                        print("8")
+                        print("8+")
                         columns_select = ", ".join(columns_select)
-                        print(common+columns_prims+columns_select)
-                        query_select = f"select {common}, {columns_prims}, {columns_select}"
+                        query_select = f"select {common}, {union}"
                     else:
                         print("7")
-                        query_select = f"select {columns_prims} "
+                        query_select = f"select {common}, {union} "
                 else:
                     if columns_select != []:
-                        print("5")
+                        print("5+")
                         columns_select = ", ".join(columns_select)
-                        query_select = f"select distinct {common}, {columns_prims}, {columns_select}"
+                        query_select = f"select distinct {common}, {union}"
                     else:
                         print("6")
-                        query_select = f"select distinct {columns_prims} "
+                        query_select = f"select distinct {common}, {union} "
+        # if common for j_attributes and columns_select == none
         else:
-            columns_select = ", ".join(columns_select)
+            union = list(set(tuple_attributes) | set(columns_select))
+            union = ", ".join(union)
             if n_opt_2 == 0:
-                query_select = f"select {columns_select}"
+                print("9+")
+                query_select = f"select {union}"
             else:
-                query_select = f"select distinct {columns_select}"
+                print("10+")
+                query_select = f"select distinct {union}"
+    # if j_attributes == none
     else:
-        columns_select = ", ".join(columns_select)
+        union = list(set(tuple_attributes) | set(columns_select))
+        union = ", ".join(union)
         if n_opt_2 == 0:
-            query_select = f"select {columns_select}"
+            print("11 +")
+            query_select = f"select {union}"
         else:
-            query_select = f"select distinct {columns_select}"
+            print("12 +")
+            query_select = f"select distinct {union}"
     return query_select, tuple_attributes, tuple_table
 
 def filterFormation(tables_filter, dict_tables_columns):
@@ -271,5 +273,6 @@ def random_query(database, primary_keys_multi):
     return dict_tables, dict_attributesNtypes, tables_filter, dict_attributes, query
 
 if __name__ == "__main__":
-        dict_tables, dict_attributesNtypes, tables_filter, dict_attributes, query = random_query("lobbyists_db", [('client_id',),('compensation_id',),('contribution_id',),('employer_id',),('gift_id',),('lobbying_activity_id',),('lobbyist_id',)])
-        print(query)
+        for n in range(50):
+            dict_tables, dict_attributesNtypes, tables_filter, dict_attributes, query = random_query("lobbyists_db", [('client_id',),('compensation_id',),('contribution_id',),('employer_id',),('gift_id',),('lobbying_activity_id',),('lobbyist_id',)])
+            print(query)
