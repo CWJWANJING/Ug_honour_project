@@ -162,6 +162,15 @@ def sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query,
     result = list(cursor_rnb.execute(f'''{query}'''))
     conn_rnb.commit()
     M = max(Ms)
+    boo = True
+    for r in result:
+    	for t in tuple:
+        	if t in r:
+            	boo = boo&True
+            else:
+            	boo = boo&False
+        if boo == True:
+        	break
     toc = time.perf_counter()
     print(f"Sampling ran in {toc - tic:0.4f} seconds")
 
@@ -169,7 +178,7 @@ def sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query,
         cursor_rnb.execute(f'''drop table if exists {n}''')
         create_repairs_blocks_table(dict_attributesNtypes[n], n, cursor_rnb)
 
-    if result[0][0] == 1:
+    if boo == True:
         return (1,M)
     else:
         return (0,M)
