@@ -176,7 +176,7 @@ def sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query,
 
 def FPRAS(database, dict_primary_keys, query, epsilon, delta):
     tic = time.perf_counter()
-    dict_attributesNtypes, dict_tables, conn_rnb, dict_attributes, tables_filter, query = pre_sampling(database)
+    dict_tables, dict_attributesNtypes, tables_filter, dict_attributes, query, tuple = pre_sampling(database)
     print(query)
     toc = time.perf_counter()
     print((f"Pre_sampling ran in {toc - tic:0.4f} seconds"))

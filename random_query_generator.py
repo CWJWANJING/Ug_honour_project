@@ -128,13 +128,9 @@ def selectFormation(tables_filter, dict_attributes, j_attributes, dict_primary_k
     n_prim = fast_randint(len(tables_filter))
     tuple_table = tables_filter[n_prim]
     columns_prims = dict_primary_keys[tuple_table]
-    print(f"columns_prims {columns_prims} \n")
-    print(f"dict_vio_select {dict_vio_select}")
     list2 = []
     list2.append(dict_vio_select[tuple_table])
-    print(f"list2: {list2} \n")
     tuple_attributes = list(set(columns_prims) | set(list2))
-    print(f"tuple: {tuple_attributes} \n")
     columns_select = set(columns_select)
     if j_attributes != []:
         common = list(set(j_attributes) & set(columns_select))
@@ -142,73 +138,57 @@ def selectFormation(tables_filter, dict_attributes, j_attributes, dict_primary_k
             comm = list(set(common)&set(tuple_attributes))
             if comm != []:
                 tt = [x for x in tuple_attributes if x not in comm]
-                print(tt)
-                print("1")
                 common = ["t1." + s for s in common]
                 common = ", ".join(common)
                 columns_select = [x for x in columns_select if x not in common]
-                print("2")
                 tt = ", ".join(tt)
                 if n_opt_2 == 0:
                     if columns_select != []:
-                        print("18+")
                         columns_select = ", ".join(columns_select)
                         query_select = f"select {common}, {tt}, {columns_select}"
                     else:
-                        print("21+")
                         query_select = f"select {tt}, {common}"
                 # if 'distinct' is chosen
                 else:
                     if columns_select != []:
-                        print("19+")
                         columns_select = ", ".join(columns_select)
                         query_select = f"select distinct {common}, {tt}, {columns_select}"
                     else:
-                        print("20+")
                         query_select = f"select distinct {tt}, {common}"
             # if comm for common and tuple_attributes == none
             else:
+                columns_select = [x for x in columns_select if x not in common]
                 common = ["t1." + s for s in common]
                 common = ", ".join(common)
-                columns_select = [x for x in columns_select if x not in common]
                 union = list(set(tuple_attributes) | set(columns_select))
                 union = ", ".join(union)
-                print("4")
                 if n_opt_2 == 0:
                     if columns_select != []:
-                        print("8+")
                         columns_select = ", ".join(columns_select)
                         query_select = f"select {common}, {union}"
                     else:
-                        print("7")
                         query_select = f"select {common}, {union} "
                 else:
                     if columns_select != []:
-                        print("5+")
                         columns_select = ", ".join(columns_select)
                         query_select = f"select distinct {common}, {union}"
                     else:
-                        print("6")
                         query_select = f"select distinct {common}, {union} "
         # if common for j_attributes and columns_select == none
         else:
             union = list(set(tuple_attributes) | set(columns_select))
             union = ", ".join(union)
             if n_opt_2 == 0:
-                print("9+")
                 query_select = f"select {union}"
             else:
-                print("10+")
                 query_select = f"select distinct {union}"
     # if j_attributes == none
     else:
         union = list(set(tuple_attributes) | set(columns_select))
         union = ", ".join(union)
         if n_opt_2 == 0:
-            print("11 +")
             query_select = f"select {union}"
         else:
-            print("12 +")
             query_select = f"select distinct {union}"
     return query_select, tuple_attributes, tuple_table
 
@@ -241,15 +221,18 @@ def filterFormation(tables_filter, dict_tables_columns):
         query_where = query_where[:-3] + ';'
     return query_where
 
-def random_violate_tuple(tuple_attributes, tuple_table, dict_tables_columns):
+def random_violate_tuple(tuple_attributes, tuple_table, dict_tables_columns, cursor):
     tuple = []
-    print(tuple_table)
+    index = []
     for t in range(len(tuple_attributes)):
         tuple_att = tuple_attributes[t]
         rows = dict_tables_columns[tuple_table][tuple_att]
-        index = fast_randint(len(rows))
+        if t == 0:
+            ind = fast_randint(len(rows))
+            index.append(ind)
+            index = str(index).strip('[]')
+            index = int(index)
         tuple.append(rows[index])
-    print(tuple)
     return tuple
 
 def random_query(database, primary_keys_multi):
@@ -267,12 +250,11 @@ def random_query(database, primary_keys_multi):
     query_where = filterFormation(tables_filter, dict_tables_columns)
     # concatenate them together
     query = query_select + query_from + query_where
-
-    tuple = random_violate_tuple(tuple_attributes, tuple_table, dict_tables_columns)
-    print(tuple)
-    return dict_tables, dict_attributesNtypes, tables_filter, dict_attributes, query
+    # generate tuple according to the query_select
+    tuple = random_violate_tuple(tuple_attributes, tuple_table, dict_tables_columns, cursor)
+    return dict_tables, dict_attributesNtypes, tables_filter, dict_attributes, query, tuple
 
 if __name__ == "__main__":
-        for n in range(50):
-            dict_tables, dict_attributesNtypes, tables_filter, dict_attributes, query = random_query("lobbyists_db", [('client_id',),('compensation_id',),('contribution_id',),('employer_id',),('gift_id',),('lobbying_activity_id',),('lobbyist_id',)])
+        for n in range(1):
+            dict_tables, dict_attributesNtypes, tables_filter, dict_attributes, query, tuple = random_query("lobbyists_db", [('client_id',),('compensation_id',),('contribution_id',),('employer_id',),('gift_id',),('lobbying_activity_id',),('lobbyist_id',)])
             print(query)
