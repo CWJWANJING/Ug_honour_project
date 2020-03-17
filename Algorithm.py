@@ -1,5 +1,6 @@
 # Authour: Wanjing Chen
 
+import csv
 import sys
 import sqlite3
 import os
@@ -55,7 +56,6 @@ def create_repairs_blocks_table(attributesNtypes, table_name, cursor_rnb):
     for row in attributesNtypes:
         create_statement_r += '{} {}, '.format(row[0], row[1])
     create_statement_r = create_statement_r[:-2] + ')'
-    print(create_statement_r)
     cursor_rnb.execute(create_statement_r)
 
 def toStr(row):
@@ -66,25 +66,43 @@ def toStr(row):
     new_row = tuple(new_row)
     return new_row
 
+def insert_repair_table_copy(repair_rows, table_name, cursor_rnb):
+    with open('tmp.copy', 'w') as copyfile:
+        w = csv.writer(copyfile, delimiter='\t')
+        w.writerows(repair_rows)
+    with open('tmp.copy', 'r') as copyfile:
+        cursor_rnb.copy_from(copyfile, table_name)
+    os.remove('tmp.copy')
+
 def insert_repair_table(repair_rows, table_name, cursor_rnb):
     # format 'insert into' statement
-    insert_statement = 'INSERT INTO ' + table_name +' VALUES '
     count = 0
-
+    one_thousand = []
     for row in repair_rows:
         row = toStr(row)
         count += 1
-        insert_statement += '{},'.format(row)
-
+        one_thousand.append(row)
         if count>0 and count%1000 == 0:
-            insert_statement = insert_statement[:-1]
-            # print("1000 statement" + insert_statement)
-            cursor_rnb.execute(insert_statement)
-            insert_statement = 'INSERT INTO ' + table_name + ' VALUES '
+            one_thousand = str(one_thousand).strip('[]')
+            cursor_rnb.execute(sql.SQL("INSERT INTO {} VALUES {}").format(sql.Identifier(table_name),sql.Literal(one_thousand)));
+            one_thousand = []
         else:
             if (len(repair_rows)-count) == len(repair_rows)%1000:
-                insert_statement = insert_statement[:-1]
-                cursor_rnb.execute(insert_statement)
+                cursor_rnb.execute("INSERT INTO {} VALUES ", (one_thousand, ));
+    # for row in repair_rows:
+    #     row = toStr(row)
+    #     count += 1
+    #     insert_statement.format(sql.Literal(row))
+
+        # if count>0 and count%1000 == 0:
+        #     insert_statement = insert_statement[:-1]
+        #     # print("1000 statement" + insert_statement)
+        #     cursor_rnb.execute(insert_statement)
+        #     insert_statement = 'INSERT INTO ' + table_name + ' VALUES '
+        # else:
+        #     if (len(repair_rows)-count) == len(repair_rows)%1000:
+        #         insert_statement = insert_statement[:-1]
+        #         cursor_rnb.execute(insert_statement)
 
 # for loop forms the blocks and in the mean time,
 # do random selection and forms the repair rows
@@ -138,7 +156,7 @@ def create_and_switch_to_rnb():
 
 def pre_sampling(database):
 
-    dict_tables, dict_attributesNtypes, tables_filter, dict_attributes, query = random_query(
+    dict_tables, dict_attributesNtypes, tables_filter, dict_attributes, query, tuple = random_query(
         "lobbyists_db", [('client_id',),('compensation_id',),('contribution_id',),('employer_id',),('gift_id',),('lobbying_activity_id',),('lobbyist_id',)])
 
     conn_rnb = create_and_switch_to_rnb()
@@ -148,29 +166,30 @@ def pre_sampling(database):
         attributesNtypes = dict_attributesNtypes[t]
         create_repairs_blocks_table(attributesNtypes, t, cursor_rnb)
 
-    return dict_attributesNtypes, dict_tables, conn_rnb, dict_attributes, tables_filter, query
+    return dict_attributesNtypes, dict_tables, conn_rnb, dict_attributes, tables_filter, query, tuple
 
-def sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query, tableNames, conn_rnb):
+def sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query, tuple, tableNames, conn_rnb):
     cursor_rnb = conn_rnb.cursor()
     Ms = []
     tic = time.perf_counter()
     for i in range(len(primary_keys_multi)):
         cols = get_prim_key_cols(primary_keys_multi[i], dict_attributesNtypes[tableNames[i]])
         M, repair_rows = blocks_repairs_formation(dict_tables[tableNames[i]], cols)
-        insert_repair_table(repair_rows, tableNames[i], cursor_rnb)
+        insert_repair_table_copy(repair_rows, tableNames[i], cursor_rnb)
         Ms.append(M)
-    result = list(cursor_rnb.execute(f'''{query}'''))
+
+    result = (cursor_rnb.execute(f'''{query}''')).fetchall()
     conn_rnb.commit()
     M = max(Ms)
     boo = True
     for r in result:
-    	for t in tuple:
-        	if t in r:
-            	boo = boo&True
+        for t in tuple:
+            if t in r:
+                boo = boo&True
             else:
-            	boo = boo&False
+                boo = boo&False
         if boo == True:
-        	break
+            break
     toc = time.perf_counter()
     print(f"Sampling ran in {toc - tic:0.4f} seconds")
 
@@ -185,7 +204,7 @@ def sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query,
 
 def FPRAS(database, dict_primary_keys, query, epsilon, delta):
     tic = time.perf_counter()
-    dict_tables, dict_attributesNtypes, tables_filter, dict_attributes, query, tuple = pre_sampling(database)
+    dict_attributesNtypes, dict_tables, conn_rnb, dict_attributes, tables_filter, query, tuple = pre_sampling(database)
     print(query)
     toc = time.perf_counter()
     print((f"Pre_sampling ran in {toc - tic:0.4f} seconds"))
@@ -200,7 +219,7 @@ def FPRAS(database, dict_primary_keys, query, epsilon, delta):
                 k += 1
     print('k (keywidth): ', k)
     # get maximum size of the blocks
-    M = sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query, tables_filter, conn_rnb)[1]
+    M = sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query, tuple, tables_filter, conn_rnb)[1]
     print('M (the maximum size of the blocks): ', M)
 
     mathLog = math.log(2/delta)

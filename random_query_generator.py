@@ -83,47 +83,44 @@ def joinPreparation(tableNames, dict_attributes):
     return dict_tables_join
 
 def joinFormation(tableNames, dict_tables_join):
-    # random select from 'inner join', 'left join', 'right join', 'full join', 'comma join'
-    opt_pre = ['inner join', 'left join', 'right join', 'full join', 'comma join']
-    n_opt_pre = fast_randint(5)
+    # random select from 'inner join', 'left join', 'right join', 'full join'
+    opt_pre = ['inner join', 'left join', 'right join', 'full join']
+    n_opt_pre = fast_randint(4)
     # +1 because we need at least one table to be selected
     n_tables = fast_randint(len(tableNames))+1
     tables_filter = []
     j_attributes = []
     query_from = " from"
-    if n_opt_pre == 4:
-        # select random number of tables in the database
-        random_index_tables = np.unique(np.random.randint(1, len(tableNames), size=n_tables))
-        random_tables = [tableNames[i] for i in random_index_tables]
-        for i in range(len(random_tables)):
-            query_from += f" {random_tables[i]} t{i+1},"
-        tables_filter = random_tables
-        query_from = query_from[:-1]
-    else:
-        table1 = random.choice(tableNames)
-        random_join_index = fast_randint(len(dict_tables_join[table1]))
-        join_type = random.choice(opt_pre[:-1])
-        tables_2 = list(dict_tables_join[table1].keys())
-        table2 = tables_2[random_join_index]
-        join_attributes = dict_tables_join[table1][table2]
-        j_att = random.choice(join_attributes)
-        query_from = f" from {table1} t1 {join_type} {table2} t2 on t1.{j_att} = t2.{j_att}"
-        tables_filter.append(table1)
-        tables_filter.append(table2)
-        j_attributes = join_attributes
+
+    table1 = random.choice(tableNames)
+    random_join_index = fast_randint(len(dict_tables_join[table1]))
+    join_type = random.choice(opt_pre[:-1])
+    tables_2 = list(dict_tables_join[table1].keys())
+    table2 = tables_2[random_join_index]
+    join_attributes = dict_tables_join[table1][table2]
+    j_att = random.choice(join_attributes)
+    query_from = f" from {table1} t1 {join_type} {table2} t2 on t1.{j_att} = t2.{j_att}"
+    tables_filter.append(table1)
+    tables_filter.append(table2)
+    j_attributes = join_attributes
     return tables_filter, query_from, j_attributes
 
-# def clean_select_att():
-#     return
+def check_union(union, j_attributes):
+    new_u = []
+    for s in union:
+        if s in j_attributes:
+            s = "t1." + s
+            new_u.append(s)
+        else:
+            new_u.append(s)
+    return new_u
 
 def selectFormation(tables_filter, dict_attributes, j_attributes, dict_primary_keys):
     # select randomly from ''distinct', 'random columns'
     n_opt_2 = fast_randint(2)
-    columns_select = []
     dict_vio_select = {}
     for t in tables_filter:
         n_columns = fast_randint(len(dict_attributes[t])-1)+1
-        columns_select.append(dict_attributes[t][n_columns])
         dict_vio_select[t] = dict_attributes[t][n_columns]
     n_prim = fast_randint(len(tables_filter))
     tuple_table = tables_filter[n_prim]
@@ -131,66 +128,30 @@ def selectFormation(tables_filter, dict_attributes, j_attributes, dict_primary_k
     list2 = []
     list2.append(dict_vio_select[tuple_table])
     tuple_attributes = list(set(columns_prims) | set(list2))
-    columns_select = set(columns_select)
+    # if joint tables have common keys
     if j_attributes != []:
-        common = list(set(j_attributes) & set(columns_select))
-        if common != []:
-            comm = list(set(common)&set(tuple_attributes))
-            if comm != []:
-                tt = [x for x in tuple_attributes if x not in comm]
-                common = ["t1." + s for s in common]
-                common = ", ".join(common)
-                columns_select = [x for x in columns_select if x not in common]
-                tt = ", ".join(tt)
-                if n_opt_2 == 0:
-                    if columns_select != []:
-                        columns_select = ", ".join(columns_select)
-                        query_select = f"select {common}, {tt}, {columns_select}"
-                    else:
-                        query_select = f"select {tt}, {common}"
-                # if 'distinct' is chosen
-                else:
-                    if columns_select != []:
-                        columns_select = ", ".join(columns_select)
-                        query_select = f"select distinct {common}, {tt}, {columns_select}"
-                    else:
-                        query_select = f"select distinct {tt}, {common}"
-            # if comm for common and tuple_attributes == none
-            else:
-                columns_select = [x for x in columns_select if x not in common]
-                common = ["t1." + s for s in common]
-                common = ", ".join(common)
-                union = list(set(tuple_attributes) | set(columns_select))
-                union = ", ".join(union)
-                if n_opt_2 == 0:
-                    if columns_select != []:
-                        columns_select = ", ".join(columns_select)
-                        query_select = f"select {common}, {union}"
-                    else:
-                        query_select = f"select {common}, {union} "
-                else:
-                    if columns_select != []:
-                        columns_select = ", ".join(columns_select)
-                        query_select = f"select distinct {common}, {union}"
-                    else:
-                        query_select = f"select distinct {common}, {union} "
-        # if common for j_attributes and columns_select == none
-        else:
-            union = list(set(tuple_attributes) | set(columns_select))
-            union = ", ".join(union)
-            if n_opt_2 == 0:
-                query_select = f"select {union}"
-            else:
-                query_select = f"select distinct {union}"
-    # if j_attributes == none
-    else:
-        union = list(set(tuple_attributes) | set(columns_select))
+        union = list(set(tuple_attributes) | set(j_attributes))
+        union = check_union(union, j_attributes)
         union = ", ".join(union)
         if n_opt_2 == 0:
             query_select = f"select {union}"
         else:
             query_select = f"select distinct {union}"
+    # if joint tables don't have common keys
+    else:
+        if n_opt_2 == 0:
+            query_select = f"select {tuple_attributes}"
+        else:
+            query_select = f"select distinct {tuple_attributes}"
     return query_select, tuple_attributes, tuple_table
+    
+def format_value(string):
+    if '\'' in string:
+        k           = string.split('\'')
+        string_list = list(map(lambda x: '\'' + x+ '\'', k ))
+        return  ''.join(string_list )
+    else:
+        return string
 
 def filterFormation(tables_filter, dict_tables_columns):
     # randomly filter the values
@@ -204,7 +165,7 @@ def filterFormation(tables_filter, dict_tables_columns):
         values = dict_tables_columns[filter_t][filter_c]
         filter_value = random.choice(values)
         t_c = tables_filter.index(filter_t)+1
-        query_where += " t{}.{} = '{}';".format(t_c, filter_c, filter_value)
+        query_where += " t{}.{} = '{}';".format(t_c, filter_c, format_value(filter_value))
     else:
         n_table_filter = fast_randint(len(tables_filter))+1
         for i in range(n_table_filter):
@@ -217,7 +178,7 @@ def filterFormation(tables_filter, dict_tables_columns):
                 values = dict_tables_columns[current_table][filter_c]
                 filter_value = random.choice(values)
                 t_c = tables_filter.index(current_table)+1
-                query_where += " t{}.{} = '{}' and".format(t_c, filter_c, filter_value)
+                query_where += " t{}.{} = '{}' and".format(t_c, filter_c, format_value(filter_value))
         query_where = query_where[:-3] + ';'
     return query_where
 
