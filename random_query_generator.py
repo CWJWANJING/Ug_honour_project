@@ -144,7 +144,7 @@ def selectFormation(tables_filter, dict_attributes, j_attributes, dict_primary_k
         else:
             query_select = f"select distinct {tuple_attributes}"
     return query_select, tuple_attributes, tuple_table
-    
+
 def format_value(string):
     if '\'' in string:
         k           = string.split('\'')
@@ -203,14 +203,23 @@ def random_query(database, primary_keys_multi):
     dict_tables_columns, dict_attributes, dict_tables, dict_primary_keys = dictionariesFormation(tableNames, dict_attributesNtypes, primary_keys_multi, cursor)
     # now start query formation
     dict_tables_join = joinPreparation(tableNames, dict_attributes)
-    # query from part
-    tables_filter, query_from, j_attributes = joinFormation(tableNames, dict_tables_join)
-    # query select part
-    query_select, tuple_attributes, tuple_table = selectFormation(tables_filter, dict_attributes, j_attributes, dict_primary_keys)
-    # query filter part
-    query_where = filterFormation(tables_filter, dict_tables_columns)
-    # concatenate them together
-    query = query_select + query_from + query_where
+    while(True):
+        # query from part
+        tables_filter, query_from, j_attributes = joinFormation(tableNames, dict_tables_join)
+        # query select part
+        query_select, tuple_attributes, tuple_table = selectFormation(tables_filter, dict_attributes, j_attributes, dict_primary_keys)
+        # query filter part
+        query_where = filterFormation(tables_filter, dict_tables_columns)
+        # concatenate them together
+        query = query_select + query_from + query_where
+        try:
+            cursor.execute(query)
+            if (len(cursor.fetchall()) == 0) or (cursor.fetchall() == None):
+                continue
+            else:
+                break
+        except:
+            None
     # generate tuple according to the query_select
     tuple = random_violate_tuple(tuple_attributes, tuple_table, dict_tables_columns, cursor)
     return dict_tables, dict_attributesNtypes, tables_filter, dict_attributes, query, tuple
@@ -219,3 +228,4 @@ if __name__ == "__main__":
         for n in range(1):
             dict_tables, dict_attributesNtypes, tables_filter, dict_attributes, query, tuple = random_query("lobbyists_db", [('client_id',),('compensation_id',),('contribution_id',),('employer_id',),('gift_id',),('lobbying_activity_id',),('lobbyist_id',)])
             print(query)
+            print(tuple)
