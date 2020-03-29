@@ -145,14 +145,6 @@ def selectFormation(tables_filter, dict_attributes, j_attributes, dict_primary_k
             query_select = f"select distinct {tuple_attributes}"
     return query_select, tuple_attributes, tuple_table
 
-def format_value(string):
-    if '\'' in string:
-        k           = string.split('\'')
-        string_list = list(map(lambda x: '\'' + x+ '\'', k ))
-        return  ''.join(string_list )
-    else:
-        return string
-
 def filterFormation(tables_filter, dict_tables_columns):
     # randomly filter the values
     # randomly decide to filter how many set of values
@@ -165,7 +157,7 @@ def filterFormation(tables_filter, dict_tables_columns):
         values = dict_tables_columns[filter_t][filter_c]
         filter_value = random.choice(values)
         t_c = tables_filter.index(filter_t)+1
-        query_where += " t{}.{} = '{}';".format(t_c, filter_c, format_value(filter_value))
+        query_where += " t{}.{} = $${}$$;".format(t_c, filter_c, filter_value)
     else:
         n_table_filter = fast_randint(len(tables_filter))+1
         for i in range(n_table_filter):
@@ -178,7 +170,7 @@ def filterFormation(tables_filter, dict_tables_columns):
                 values = dict_tables_columns[current_table][filter_c]
                 filter_value = random.choice(values)
                 t_c = tables_filter.index(current_table)+1
-                query_where += " t{}.{} = '{}' and".format(t_c, filter_c, format_value(filter_value))
+                query_where += " t{}.{} = $${}$$ and".format(t_c, filter_c, filter_value)
         query_where = query_where[:-3] + ';'
     return query_where
 

@@ -63,46 +63,90 @@ def toStr(row):
     for r in row:
         r = str(r)
         new_row.append(r)
-    new_row = tuple(new_row)
+    new_row = str(new_row).strip('[]')
     return new_row
 
-def insert_repair_table_copy(repair_rows, table_name, cursor_rnb):
-    with open('tmp.copy', 'w') as copyfile:
-        w = csv.writer(copyfile, delimiter='\t')
-        w.writerows(repair_rows)
-    with open('tmp.copy', 'r') as copyfile:
-        cursor_rnb.copy_from(copyfile, table_name)
-    os.remove('tmp.copy')
+# def insert_repair_table_copy(repair_rows, table_name, cursor_rnb):
+#     with open('tmp.copy', 'w') as copyfile:
+#         w = csv.writer(copyfile, delimiter='\t')
+#         w.writerows(repair_rows)
+#     with open('tmp.copy', 'r') as copyfile:
+#         cursor_rnb.copy_from(copyfile, table_name)
+#     cursor_rnb.execute('''SELECT table_name FROM information_schema.tables WHERE table_type='BASE TABLE' AND table_schema='public';''')
+#     r = cursor_rnb.fetchall()
+#     for i in r:
+#         print(i[0])
+#         print(cursor_rnb.execute(f'''select * from {i[0]} limit 10;'''))
+#     print(r)
+#
+#     os.remove('tmp.copy')
 
-def insert_repair_table(repair_rows, table_name, cursor_rnb):
+# def format_v(t):
+#     temp_t = list(t)
+#     for idx, s in enumerate(temp_t):
+#         if '\'' in s:
+#             temp_t[idx] = "$$" + s + "$$"
+#     return tuple(temp_t)
+
+def insert_repair_table(repair_rows, table_name, cursor_rnb, dict_attributesNtypes, conn_rnb):
+    print(dict_attributesNtypes)
     # format 'insert into' statement
+
+    insert_statement = 'INSERT INTO ' + table_name + "("
+    for at in dict_attributesNtypes:
+        insert_statement += " " + at[0] + ","
+
+    insert_statement = insert_statement[:-1] + ")" + " VALUES "
+    ini_insert_statement = insert_statement
+
+    # ini_insert_statement = insert_statement
+
+    l = len(repair_rows[0])
+
     count = 0
-    one_thousand = []
     for row in repair_rows:
-        row = toStr(row)
         count += 1
-        one_thousand.append(row)
+        for i in range(l):
+            if i == 0:
+                insert_statement += "("
+            insert_statement += "$${}$$,".format(row[i])
+            if i == (l-1):
+                insert_statement = insert_statement[:-1] + "),"
         if count>0 and count%1000 == 0:
-            one_thousand = str(one_thousand).strip('[]')
-            cursor_rnb.execute(sql.SQL("INSERT INTO {} VALUES {}").format(sql.Identifier(table_name),sql.Literal(one_thousand)));
-            one_thousand = []
+            insert_statement = insert_statement[:-1]
+            # print("1000 statement" + insert_statement + "\n \n\n\n\n\n\n\n")
+            cursor_rnb.execute(insert_statement)
+            insert_statement = ini_insert_statement
         else:
             if (len(repair_rows)-count) == len(repair_rows)%1000:
-                cursor_rnb.execute("INSERT INTO {} VALUES ", (one_thousand, ));
+                insert_statement = insert_statement[:-1]
+                cursor_rnb.execute(insert_statement)
+
+        # insert_statement = insert_statement[:-1] + ")"
+        # print(insert_statement)
+
+
+        # row = toStr(row)
+        # hehe = "i'm good"
+        # cursor_rnb.execute(f"INSERT INTO {table_name} VALUES ($${row[0]}$$), ($${row[1]}$$)")
+        # insert_statement = ini_insert_statement
+
+    # insert_values = ""
     # for row in repair_rows:
     #     row = toStr(row)
     #     count += 1
-    #     insert_statement.format(sql.Literal(row))
-
-        # if count>0 and count%1000 == 0:
-        #     insert_statement = insert_statement[:-1]
-        #     # print("1000 statement" + insert_statement)
-        #     cursor_rnb.execute(insert_statement)
-        #     insert_statement = 'INSERT INTO ' + table_name + ' VALUES '
-        # else:
-        #     if (len(repair_rows)-count) == len(repair_rows)%1000:
-        #         insert_statement = insert_statement[:-1]
-        #         cursor_rnb.execute(insert_statement)
+    #     row = format_v(row)
+    #     insert_values += "{},".format(row)
+    #
+    #     if count>0 and count%1000 == 0:
+    #         insert_values = insert_values[:-1]
+    #         # print("1000 statement" + insert_statement)
+    #         cursor_rnb.execute(insert_statement, (insert_values, ))
+    #         insert_values = ""
+    #     else:
+    #         if (len(repair_rows)-count) == len(repair_rows)%1000:
+    #             insert_values = insert_values[:-1]
+    #             cursor_rnb.execute(insert_statement, (insert_values, ))
 
 # for loop forms the blocks and in the mean time,
 # do random selection and forms the repair rows
@@ -175,10 +219,12 @@ def sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query,
     for i in range(len(primary_keys_multi)):
         cols = get_prim_key_cols(primary_keys_multi[i], dict_attributesNtypes[tableNames[i]])
         M, repair_rows = blocks_repairs_formation(dict_tables[tableNames[i]], cols)
-        insert_repair_table_copy(repair_rows, tableNames[i], cursor_rnb)
+        insert_repair_table(repair_rows, tableNames[i], cursor_rnb, dict_attributesNtypes[tableNames[i]], conn_rnb)
+        conn_rnb.commit()
+        # TODO commit and open again?
         Ms.append(M)
 
-    result = (cursor_rnb.execute(f'''{query}''')).fetchall()
+    result = cursor_rnb.execute(query).fetchall()
     conn_rnb.commit()
     M = max(Ms)
     boo = True
@@ -202,7 +248,7 @@ def sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query,
     else:
         return (0,M)
 
-def FPRAS(database, dict_primary_keys, query, epsilon, delta):
+def FPRAS(database, dict_primary_keys, epsilon, delta):
     tic = time.perf_counter()
     dict_attributesNtypes, dict_tables, conn_rnb, dict_attributes, tables_filter, query, tuple = pre_sampling(database)
     print(query)
@@ -252,8 +298,11 @@ if __name__ == "__main__":
             "lobbying_activities" : 'lobbying_activity_id',
             "lobbyists" : 'lobbyist_id'
             }
-    result_fpras = FPRAS("lobbyists_db", dict_primary_keys, "SELECT CASE WHEN (SELECT COUNT(*) FROM clients WHERE client_id = 38662) = 1 THEN 1 ELSE 0 END", 0.1, 0.75)
+    result_fpras = FPRAS("lobbyists_db", dict_primary_keys, 0.1, 0.75)
 
+
+
+    # print(format_v(("202020-3030-2939", "O'hi")))
 
         # result_sample = sampling("traffic_crashes_chicago", "locations", ('street_name', 'street_no', 'street_direction'),  "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (street_name, street_no, street_direction) = ('ARCHER AVE', '3652', 'S')) = 1 THEN 1 ELSE 0 END")[0]
         # result_fpras = FPRAS('food_inspections_chicago', 'facilities', ('license_', 'aka_name'), "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (license_, aka_name) =  (2516677,'KIMCHI POP')) = 1 THEN 1 ELSE 0 END", 0.6, 0.5)
