@@ -89,7 +89,6 @@ def toStr(row):
 #     return tuple(temp_t)
 
 def insert_repair_table(repair_rows, table_name, cursor_rnb, dict_attributesNtypes, conn_rnb):
-    print(dict_attributesNtypes)
     # format 'insert into' statement
 
     insert_statement = 'INSERT INTO ' + table_name + "("
@@ -103,16 +102,26 @@ def insert_repair_table(repair_rows, table_name, cursor_rnb, dict_attributesNtyp
 
     l = len(repair_rows[0])
 
+    # print(repair_rows)
     count = 0
     for row in repair_rows:
         count += 1
         for i in range(l):
             if i == 0:
                 insert_statement += "("
-            insert_statement += "$${}$$,".format(row[i])
-            if i == (l-1):
+                insert_statement += "$${}$$,".format(row[i])
+            elif i == (l-1):
+                insert_statement += "$${}$$,".format(row[i])
                 insert_statement = insert_statement[:-1] + "),"
-        if count>0 and count%1000 == 0:
+            else:
+                insert_statement += "$${}$$,".format(row[i])
+        # print(insert_statement)
+        # print(count)
+        if count<1000 and count == len(repair_rows):
+            insert_statement = insert_statement[:-1]
+            # print(insert_statement)
+            cursor_rnb.execute(insert_statement)
+        elif count>0 and count%1000 == 0:
             insert_statement = insert_statement[:-1]
             # print("1000 statement" + insert_statement + "\n \n\n\n\n\n\n\n")
             cursor_rnb.execute(insert_statement)
@@ -122,6 +131,8 @@ def insert_repair_table(repair_rows, table_name, cursor_rnb, dict_attributesNtyp
                 insert_statement = insert_statement[:-1]
                 cursor_rnb.execute(insert_statement)
 
+    conn_rnb.commit()
+    return cursor_rnb
         # insert_statement = insert_statement[:-1] + ")"
         # print(insert_statement)
 
@@ -219,13 +230,12 @@ def sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query,
     for i in range(len(primary_keys_multi)):
         cols = get_prim_key_cols(primary_keys_multi[i], dict_attributesNtypes[tableNames[i]])
         M, repair_rows = blocks_repairs_formation(dict_tables[tableNames[i]], cols)
-        insert_repair_table(repair_rows, tableNames[i], cursor_rnb, dict_attributesNtypes[tableNames[i]], conn_rnb)
-        conn_rnb.commit()
-        # TODO commit and open again?
+        cursor_rnb = insert_repair_table(repair_rows, tableNames[i], cursor_rnb, dict_attributesNtypes[tableNames[i]], conn_rnb)
         Ms.append(M)
 
-    result = cursor_rnb.execute(query).fetchall()
-    conn_rnb.commit()
+    cursor_rnb.execute(query)
+    result = cursor_rnb.fetchall()
+
     M = max(Ms)
     boo = True
     for r in result:
@@ -275,7 +285,9 @@ def FPRAS(database, dict_primary_keys, epsilon, delta):
 
     count = 0
     for i in range(0, NLoop):
-        count += sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query, tables_filter, conn_rnb)[0]
+        print(count)
+        count += sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query, tuple, tables_filter, conn_rnb)[0]
+        sys.exit()
     print('The sum of sampling score is: ', count)
     print('The probability is: ')
     cleanup()

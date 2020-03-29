@@ -212,6 +212,7 @@ def random_query(database, primary_keys_multi):
                 break
         except:
             None
+    print(tuple_attributes)
     # generate tuple according to the query_select
     tuple = random_violate_tuple(tuple_attributes, tuple_table, dict_tables_columns, cursor)
     return dict_tables, dict_attributesNtypes, tables_filter, dict_attributes, query, tuple
