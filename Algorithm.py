@@ -223,10 +223,19 @@ def pre_sampling(database):
 
     return dict_attributesNtypes, dict_tables, conn_rnb, dict_attributes, tables_filter, query, tuple
 
+def check_in(tuple, result):
+    for r in result:
+        boo =  all(elem in r for elem in tuple)
+        if boo == True:
+            return 1
+        else:
+            continue
+    return 0
+
 def sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query, tuple, tableNames, conn_rnb):
     cursor_rnb = conn_rnb.cursor()
     Ms = []
-    tic = time.perf_counter()
+    # tic = time.perf_counter()
     for i in range(len(primary_keys_multi)):
         cols = get_prim_key_cols(primary_keys_multi[i], dict_attributesNtypes[tableNames[i]])
         M, repair_rows = blocks_repairs_formation(dict_tables[tableNames[i]], cols)
@@ -235,32 +244,22 @@ def sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query,
 
     cursor_rnb.execute(query)
     result = cursor_rnb.fetchall()
-
+    score = check_in(tuple, result)
     M = max(Ms)
-    boo = True
-    for r in result:
-        for t in tuple:
-            if t in r:
-                boo = boo&True
-            else:
-                boo = boo&False
-        if boo == True:
-            break
-    toc = time.perf_counter()
-    print(f"Sampling ran in {toc - tic:0.4f} seconds")
+    boo = check_in(tuple, result)
+    # toc = time.perf_counter()
+    # print(f"Sampling ran in {toc - tic:0.4f} seconds")
 
     for n in tableNames:
         cursor_rnb.execute(f'''drop table if exists {n}''')
         create_repairs_blocks_table(dict_attributesNtypes[n], n, cursor_rnb)
 
-    if boo == True:
-        return (1,M)
-    else:
-        return (0,M)
+    return score, M
 
 def FPRAS(database, dict_primary_keys, epsilon, delta):
     tic = time.perf_counter()
     dict_attributesNtypes, dict_tables, conn_rnb, dict_attributes, tables_filter, query, tuple = pre_sampling(database)
+    print(tuple)
     print(query)
     toc = time.perf_counter()
     print((f"Pre_sampling ran in {toc - tic:0.4f} seconds"))
@@ -284,13 +283,15 @@ def FPRAS(database, dict_primary_keys, epsilon, delta):
     NLoop = math.ceil(N)
 
     count = 0
+    index = 0
     for i in range(0, NLoop):
-        print(count)
         count += sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query, tuple, tables_filter, conn_rnb)[0]
-        sys.exit()
+        index+=1
+        print("Index: ", index)
+        print("Score: ", count)
+        # sys.exit()
     print('The sum of sampling score is: ', count)
-    print('The probability is: ')
-    cleanup()
+    print('The probability is: ', count/NLoop)
     return count/NLoop
 
 
@@ -300,6 +301,7 @@ if __name__ == "__main__":
     # results = []
     # for i in range(0,1):
         # result_sample = sampling('food_inspections_chicago', 'facilities', ('license_', 'aka_name'), "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (license_, aka_name) =  (1299537, 'GALLERIA MARKET')) = 1 THEN 1 ELSE 0 END")[0]
+
     cleanup()
     dict_primary_keys = {
             "clients": 'client_id',
@@ -310,11 +312,12 @@ if __name__ == "__main__":
             "lobbying_activities" : 'lobbying_activity_id',
             "lobbyists" : 'lobbyist_id'
             }
+    tic = time.perf_counter()
     result_fpras = FPRAS("lobbyists_db", dict_primary_keys, 0.1, 0.75)
+    toc = time.perf_counter()
+    print(f"FPRAS ran in {toc - tic:0.4f} seconds")
+    # print(format_v(("202020-3030-2939", "O'hi"))
 
-
-
-    # print(format_v(("202020-3030-2939", "O'hi")))
 
         # result_sample = sampling("traffic_crashes_chicago", "locations", ('street_name', 'street_no', 'street_direction'),  "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (street_name, street_no, street_direction) = ('ARCHER AVE', '3652', 'S')) = 1 THEN 1 ELSE 0 END")[0]
         # result_fpras = FPRAS('food_inspections_chicago', 'facilities', ('license_', 'aka_name'), "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (license_, aka_name) =  (2516677,'KIMCHI POP')) = 1 THEN 1 ELSE 0 END", 0.6, 0.5)
