@@ -4,6 +4,7 @@ from psycopg2 import sql
 import random
 import numpy as np
 import pdb
+import itertools
 
 def fast_randint(size):
     """Returns a random integer between 0 and size
@@ -143,7 +144,7 @@ def selectFormation(tables_filter, dict_attributes, j_attributes, dict_primary_k
             query_select = f"select {tuple_attributes}"
         else:
             query_select = f"select distinct {tuple_attributes}"
-    return query_select, tuple_attributes, tuple_table
+    return query_select, tuple_attributes, tuple_table, columns_prims
 
 def filterFormation(tables_filter, dict_tables_columns):
     # randomly filter the values
@@ -174,17 +175,42 @@ def filterFormation(tables_filter, dict_tables_columns):
         query_where = query_where[:-3] + ';'
     return query_where
 
-def random_violate_tuple(tuple_attributes, tuple_table, dict_tables_columns, cursor):
+def random_violate_tuple(tuple_attributes, tuple_table, dict_tables_columns, cursor, columns_prims):
     tuple = []
-    index = []
-    for t in range(len(tuple_attributes)):
-        tuple_att = tuple_attributes[t]
-        rows = dict_tables_columns[tuple_table][tuple_att]
-        if t == 0:
-            ind = fast_randint(len(rows))
-            index.append(ind)
-            index = str(index).strip('[]')
-            index = int(index)
+    options = []
+    violation_options = []
+    for p in columns_prims:
+        rows = dict_tables_columns[tuple_table][p]
+        options.append(rows)
+    options = np.array(options).T
+    print(options)
+    print(len(options))
+    for i in range(len(options)):
+        prim_tuple = options[i]
+        count = 0
+        # compare the values in the list
+        for q in range(len(options)):
+            if prim_tuple == options[q]:
+                count+=1
+        # if the occurrance is larger than one, then there's a repetition, store it in violating blocks list
+        if count > 1:
+            prim_tuple = prim_tuple.tolist()
+            prim_tuple = str(prim_tuple).strip('[]')
+            violation_options.append(prim_tuple)
+    # clean repetitions
+    violation_options.sort()
+    violation_options = list(violation_options for violation_options,_ in itertools.groupby(violation_options))
+    # randomly select a number
+    rand_index = fast_randint(len(violation_options))
+    print(violation_options)
+    chosen_value = violation_options[rand_index]
+    # find its index in the original list
+    index = options.tolist().index(chosen_value)
+    tuple.append(prim_tuple)
+
+    otherAttribute = list(set(tuple_attributes) - set(columns_prims))
+    for t in otherAttribute:
+        rows = dict_tables_columns[tuple_table][t]
         tuple.append(rows[index])
     return tuple
 
@@ -199,7 +225,7 @@ def random_query(database, primary_keys_multi):
         # query from part
         tables_filter, query_from, j_attributes = joinFormation(tableNames, dict_tables_join)
         # query select part
-        query_select, tuple_attributes, tuple_table = selectFormation(tables_filter, dict_attributes, j_attributes, dict_primary_keys)
+        query_select, tuple_attributes, tuple_table, columns_prims = selectFormation(tables_filter, dict_attributes, j_attributes, dict_primary_keys)
         # query filter part
         query_where = filterFormation(tables_filter, dict_tables_columns)
         # concatenate them together
@@ -214,7 +240,7 @@ def random_query(database, primary_keys_multi):
             None
     print(tuple_attributes)
     # generate tuple according to the query_select
-    tuple = random_violate_tuple(tuple_attributes, tuple_table, dict_tables_columns, cursor)
+    tuple = random_violate_tuple(tuple_attributes, tuple_table, dict_tables_columns, cursor, columns_prims)
     return dict_tables, dict_attributesNtypes, tables_filter, dict_attributes, query, tuple
 
 if __name__ == "__main__":
