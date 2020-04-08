@@ -58,13 +58,14 @@ def create_repairs_blocks_table(attributesNtypes, table_name, cursor_rnb):
     create_statement_r = create_statement_r[:-2] + ')'
     cursor_rnb.execute(create_statement_r)
 
-def toStr(row):
-    new_row = []
-    for r in row:
-        r = str(r)
-        new_row.append(r)
-    new_row = str(new_row).strip('[]')
-    return new_row
+# this function was for those tpc databases
+# def toStr(row):
+#     new_row = []
+#     for r in row:
+#         r = str(r)
+#         new_row.append(r)
+#     new_row = str(new_row).strip('[]')
+#     return new_row
 
 # def insert_repair_table_copy(repair_rows, table_name, cursor_rnb):
 #     with open('tmp.copy', 'w') as copyfile:
@@ -209,10 +210,10 @@ def create_and_switch_to_rnb():
 
     return conn_rnb
 
-def pre_sampling(database):
+def pre_sampling(database, primary_keys_multi):
 
     dict_tables, dict_attributesNtypes, tables_filter, dict_attributes, query, tuple = random_query(
-        "lobbyists_db", [('client_id',),('compensation_id',),('contribution_id',),('employer_id',),('gift_id',),('lobbying_activity_id',),('lobbyist_id',)])
+        database, primary_keys_multi)
 
     conn_rnb = create_and_switch_to_rnb()
     cursor_rnb = conn_rnb.cursor()
@@ -246,7 +247,6 @@ def sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query,
     result = cursor_rnb.fetchall()
     score = check_in(tuple, result)
     M = max(Ms)
-    boo = check_in(tuple, result)
     # toc = time.perf_counter()
     # print(f"Sampling ran in {toc - tic:0.4f} seconds")
 
@@ -256,9 +256,9 @@ def sampling_loop(dict_tables, dict_attributesNtypes, primary_keys_multi, query,
 
     return score, M
 
-def FPRAS(database, dict_primary_keys, epsilon, delta):
+def FPRAS(database, primary_keys_multi, dict_primary_keys, epsilon, delta):
     tic = time.perf_counter()
-    dict_attributesNtypes, dict_tables, conn_rnb, dict_attributes, tables_filter, query, tuple = pre_sampling(database)
+    dict_attributesNtypes, dict_tables, conn_rnb, dict_attributes, tables_filter, query, tuple = pre_sampling(database, primary_keys_multi)
     print(tuple)
     print(query)
     toc = time.perf_counter()
@@ -303,6 +303,7 @@ if __name__ == "__main__":
         # result_sample = sampling('food_inspections_chicago', 'facilities', ('license_', 'aka_name'), "SELECT CASE WHEN (SELECT COUNT(*) FROM Repair WHERE (license_, aka_name) =  (1299537, 'GALLERIA MARKET')) = 1 THEN 1 ELSE 0 END")[0]
 
     cleanup()
+    primary_keys_multi = [('client_id',),('compensation_id',),('contribution_id',),('employer_id',),('gift_id',),('lobbying_activity_id',),('lobbyist_id',)]
     dict_primary_keys = {
             "clients": 'client_id',
             "compensations" : 'compensation_id' ,
@@ -313,7 +314,7 @@ if __name__ == "__main__":
             "lobbyists" : 'lobbyist_id'
             }
     tic = time.perf_counter()
-    result_fpras = FPRAS("lobbyists_db", dict_primary_keys, 0.1, 0.75)
+    result_fpras = FPRAS("lobbyists_db", primary_keys_multi, dict_primary_keys, 0.1, 0.75)
     toc = time.perf_counter()
     print(f"FPRAS ran in {toc - tic:0.4f} seconds")
     # print(format_v(("202020-3030-2939", "O'hi"))

@@ -87,7 +87,7 @@ def joinFormation(tableNames, dict_tables_join):
     opt_pre = ['inner join', 'left join', 'right join', 'full join']
     n_opt_pre = fast_randint(4)
     # +1 because we need at least one table to be selected
-    n_tables = fast_randint(len(tableNames))+1
+    # n_tables = fast_randint(len(tableNames))+1
     tables_filter = []
     j_attributes = []
     query_from = " from"
