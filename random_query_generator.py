@@ -128,7 +128,7 @@ def selectFormation(tables_filter, dict_attributes, j_attributes, dict_primary_k
     columns_prims = dict_primary_keys[tuple_table]
     list2 = []
     list2.append(dict_vio_select[tuple_table])
-    tuple_attributes = list(set(columns_prims) | set(list2))
+    tuple_attributes = list(set(list2) | set(columns_prims))
     # if joint tables have common keys
     if j_attributes != []:
         union = list(set(tuple_attributes) | set(j_attributes))
@@ -183,34 +183,31 @@ def random_violate_tuple(tuple_attributes, tuple_table, dict_tables_columns, cur
         rows = dict_tables_columns[tuple_table][p]
         options.append(rows)
     options = np.array(options).T
-    print(options)
-    print(len(options))
+    options = options.tolist()
     for i in range(len(options)):
         prim_tuple = options[i]
-        count = 0
-        # compare the values in the list
-        for q in range(len(options)):
-            if prim_tuple == options[q]:
-                count+=1
+        count = options.count(prim_tuple)
         # if the occurrance is larger than one, then there's a repetition, store it in violating blocks list
         if count > 1:
-            prim_tuple = prim_tuple.tolist()
-            prim_tuple = str(prim_tuple).strip('[]')
+            prim_tuple = prim_tuple
             violation_options.append(prim_tuple)
     # clean repetitions
     violation_options.sort()
     violation_options = list(violation_options for violation_options,_ in itertools.groupby(violation_options))
     # randomly select a number
     rand_index = fast_randint(len(violation_options))
-    print(violation_options)
     chosen_value = violation_options[rand_index]
-    # find its index in the original list
-    index = options.tolist().index(chosen_value)
-    tuple.append(prim_tuple)
+    print(len(options))
 
+    # find its index in the original list
+    index = options.index(chosen_value)
+    for a in prim_tuple:
+        tuple.append(a)
+    print(index)
     otherAttribute = list(set(tuple_attributes) - set(columns_prims))
     for t in otherAttribute:
         rows = dict_tables_columns[tuple_table][t]
+        print(index)
         tuple.append(rows[index])
     return tuple
 
